@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" translate="no">
+<head>
+<meta charset="UTF-8">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Arimo:ital,wght@0,400;0,700;1,400;1,700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Arimo:ital,wght@0,400;0,700;1,400;1,700&display=swap"></noscript>
+<title>美國十四大營養標示產生器</title>
+<style>
+  :root{
+    --ink:#15191c;
+    --ink-soft:#4a5258;
+    --paper:#eef1f0;
+    --card:#ffffff;
+    --line:#d5dad8;
+    --accent:#0e5a50;
+    --accent-soft:#e2efec;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Helvetica Neue",Arial,"PingFang TC","Microsoft JhengHei",sans-serif;
+    line-height:1.5;
+  }
+  header{
+    background:var(--card);
+    border-bottom:1px solid var(--line);
+    padding:20px 28px;
+  }
+  header .eyebrow{
+    font-size:12px;letter-spacing:.18em;color:var(--accent);
+    text-transform:uppercase;font-weight:700;margin-bottom:4px;
+  }
+  header h1{margin:0;font-size:22px;font-weight:800;}
+  header p{margin:6px 0 0;color:var(--ink-soft);font-size:13.5px;max-width:720px;}
+
+  .wrap{
+    display:grid;
+    grid-template-columns:minmax(340px,1fr) minmax(320px,420px);
+    gap:24px;
+    padding:24px 28px 60px;
+    max-width:1180px;
+    margin:0 auto;
+    align-items:start;
+  }
+  @media (max-width:860px){
+    .wrap{grid-template-columns:1fr;}
+    .preview-col{position:static !important;}
+  }
+
+  .panel{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:20px 22px;
+    margin-bottom:20px;
+  }
+  .panel h2{
+    margin:0 0 14px;font-size:14px;letter-spacing:.08em;
+    color:var(--accent);font-weight:800;text-transform:uppercase;
+    border-bottom:2px solid var(--accent-soft);padding-bottom:8px;
+  }
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px 16px;}
+  @media (max-width:520px){.grid2,.grid3{grid-template-columns:1fr;}}
+
+  label.field{display:block;font-size:12.5px;color:var(--ink-soft);font-weight:600;}
+  label.field span.en{color:#9aa3a8;font-weight:400;}
+  .field input,.field select{
+    width:100%;margin-top:4px;
+    padding:8px 10px;font-size:14px;
+    border:1px solid var(--line);border-radius:6px;
+    background:#fcfdfd;color:var(--ink);
+    font-family:var(--mono);
+  }
+  .field select{font-family:inherit;}
+  .field input:focus,.field select:focus{
+    outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);
+  }
+
+  table.calc{
+    width:100%;border-collapse:collapse;font-size:13px;
+  }
+  table.calc th,table.calc td{
+    padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;
+  }
+  table.calc th{
+    font-size:11.5px;letter-spacing:.05em;color:var(--ink-soft);
+    text-transform:uppercase;border-bottom:2px solid var(--line);
+  }
+  table.calc td.num{font-family:var(--mono);text-align:right;}
+  table.calc td input{
+    width:90px;padding:5px 8px;font-size:13.5px;text-align:right;
+    border:1px solid var(--line);border-radius:5px;background:#fcfdfd;
+    font-family:var(--mono);
+  }
+  table.calc td input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  table.calc tr.sub td:first-child{padding-left:22px;color:var(--ink-soft);}
+  .note{font-size:12px;color:var(--ink-soft);margin-top:10px;}
+
+  .preview-col{position:sticky;top:20px;}
+  .toolbar{display:flex;gap:10px;margin-bottom:14px;}
+  .toolbar button{
+    flex:1;padding:10px 12px;font-size:14px;font-weight:700;
+    border-radius:8px;border:1px solid var(--accent);
+    cursor:pointer;
+  }
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:#0b4a42;}
+  .btn-ghost{background:#fff;color:var(--accent);}
+  .btn-ghost:hover{background:var(--accent-soft);}
+
+  /* ===== 報告版面（對應 Excel 輸出樣式） ===== */
+  .sheet{
+    background:#fff;
+    padding:18px 20px 14px;
+    box-shadow:0 8px 24px rgba(20,40,35,.12);
+  }
+  .sheet-title{
+    text-align:center;font-size:19px;font-weight:800;
+    color:#000;margin-bottom:12px;
+    font-family:"PingFang TC","Microsoft JhengHei",sans-serif;
+  }
+  .sheet-sample{
+    display:flex;gap:8px;align-items:flex-start;
+    font-size:11px;color:#000;margin-bottom:10px;
+    font-family:"PingFang TC","Microsoft JhengHei",sans-serif;
+  }
+  .sheet-sample .lab{white-space:nowrap;font-size:12px;}
+  .sheet-sample .val{word-break:break-word;}
+  .sheet-foot{
+    text-align:center;font-size:11.5px;font-weight:700;color:#000;
+    margin-top:12px;
+    font-family:"PingFang TC","Microsoft JhengHei",sans-serif;
+  }
+
+  /* ===== FDA Nutrition Facts label ===== */
+  .nf{
+    background:#fff;
+    border:2px solid #000;
+    padding:5px 9px 7px;
+    width:100%;
+    max-width:320px;
+    margin:0 auto;
+    color:#000;
+    font-family:"Arimo",Arial,"Helvetica Neue",Helvetica,sans-serif;
+  }
+  /* 標題：Archivo Black，靠左撐滿寬度（模擬 Helvetica Black flush left/right） */
+  .nf .title{
+    font-family:"Archivo Black","Arial Black","Helvetica Neue",Arial,sans-serif;
+    font-size:33px;font-weight:900;line-height:.98;
+    text-align:left;letter-spacing:-1.2px;
+    margin:0 0 1px;
+  }
+  .nf .hr1{border-top:1px solid #000;margin:0;}
+  .nf .hr7{border-top:8px solid #000;margin:2px 0;}
+  .nf .hr4{border-top:4px solid #000;margin:2px 0;}
+  .nf .hrsep{border-top:1px solid #000;}
+  /* servings per container：靠左，正常字重 */
+  .nf .servings{font-size:13px;padding:1px 0;}
+  .nf .servings b{font-weight:400;}
+  /* Serving size：粗體，數值靠右 */
+  .nf .servsize{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-weight:700;font-size:15px;padding:1px 0;
+  }
+  .nf .servsize .sz-val{font-weight:700;}
+  .nf .aps{font-size:11px;font-weight:700;padding-top:2px;}
+  /* Calories：標題粗、數字特大，兩端對齊 */
+  .nf .cal-row{display:flex;justify-content:space-between;align-items:flex-end;padding:1px 0;}
+  .nf .cal-label{font-size:22px;font-weight:700;line-height:1;}
+  .nf .cal-val{font-size:38px;font-weight:700;line-height:.9;letter-spacing:-1px;}
+  .nf .dv-head{font-size:11px;font-weight:700;text-align:right;padding:2px 0 1px;}
+  /* 營養素列：名稱粗體、數量正常字重、%DV 靠右粗體 */
+  .nf .nrow{
+    display:flex;justify-content:space-between;align-items:baseline;
+    border-top:1px solid #000;padding:2px 0;font-size:13px;line-height:1.15;
+  }
+  .nf .nrow .lft{font-weight:400;}
+  .nf .nrow .lft b{font-weight:700;}
+  .nf .nrow .lft .val{margin-left:5px;font-weight:400;}
+  .nf .ind{padding-left:16px;}
+  .nf .ind2{padding-left:32px;}
+  .nf .dv{font-weight:700;}
+  /* 底部維生素礦物質區：名稱正常字重、%DV 靠右不加粗 */
+  .nf .vmin .lft{font-weight:400;}
+  .nf .vmin .dv{font-weight:400;}
+  .nf .foot{
+    font-size:10px;border-top:4px solid #000;
+    margin-top:2px;padding-top:3px;line-height:1.25;font-weight:400;
+  }
+  .nf .foot .star{font-weight:400;}
+  .nf i{font-style:italic;}
+
+  @media print{
+    body *{visibility:hidden;}
+    #labelArea, #labelArea *{visibility:visible;}
+    #labelArea{position:absolute;left:0;top:0;width:100%;}
+    .nf{box-shadow:none;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">US FDA · Nutrition Facts</div>
+  <h1>美國十四大營養標示產生器</h1>
+  <p>輸入每 100 g（或 100 mL）檢驗數值與份量資訊，系統依 FDA 修整規則自動計算每份含量與 % Daily Value，並即時產生 Nutrition Facts 標籤。</p>
+</header>
+
+<div class="wrap">
+  <div><!-- 左欄：輸入 -->
+
+    <div class="panel">
+      <h2>樣品與份量資訊</h2>
+      <div class="grid2">
+        <label class="field" style="grid-column:1/-1;">樣品名稱
+          <input type="text" id="sampleName" value="">
+        </label>
+        <label class="field">本包裝含(servings per container)
+          <input type="number" id="servingsPerContainer" value="1" min="0" step="any">
+        </label>
+        <label class="field">每份重量
+          <input type="number" id="servingWeight" value="100" min="0" step="any">
+        </label>
+        <label class="field">重量單位
+          <select id="weightUnit">
+            <option value="g" selected>g</option>
+            <option value="mL">mL</option>
+          </select>
+        </label>
+        <label class="field">建議食用份量
+          <input type="text" id="servingAmount" value="1">
+        </label>
+        <div class="note" style="grid-column:1/-1;margin-top:0;">＊(建議食用份量的「單位」會隨著食物樣貌不同而有所改變，可依據客戶需求填寫，此處單位僅寫常見單位)</div>
+        <label class="field" style="grid-column:1/-1;">食用份量單位
+          <select id="servingUnitSelect">
+            <option value="slices" selected>slices</option>
+            <option value="cup">cup</option>
+            <option value="chips">chips</option>
+            <option value="tbsp">tbsp</option>
+            <option value="container">container</option>
+            <option value="pack">pack</option>
+            <option value="box">box</option>
+            <option value="__custom">自訂…</option>
+          </select>
+          <input type="text" id="servingUnitCustom" placeholder="輸入自訂單位" style="display:none;margin-top:6px;">
+        </label>
+        <label class="field" style="grid-column:1/-1;">維生素／礦物質低於 2% RDI 時的標示方式 <span class="en">(21 CFR 101.9(c)(8)(iii))</span>
+          <select id="lt2Mode">
+            <option value="amount" selected>標示修整後含量＋0% DV（業界常見）</option>
+            <option value="zero">含量與 DV% 皆標示為 0</option>
+            <option value="omit">省略該列＋加註 Not a significant source of ___</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>檢驗數值（每 100 g／100 mL）</h2>
+      <table class="calc">
+        <thead>
+          <tr><th>測項</th><th style="text-align:right;">數值</th><th style="text-align:right;">每份含量</th><th style="text-align:right;">RDI%</th></tr>
+        </thead>
+        <tbody id="calcBody">
+          <tr><td>熱量(Calories)</td><td class="num" id="rawCal">–</td><td class="num" id="srvCal">–</td><td class="num">–</td></tr>
+          <tr><td>蛋白質(Protein)</td><td class="num"><input id="in_protein" type="number" step="any" value="29.1"></td><td class="num" id="srv_protein">–</td><td class="num">–</td></tr>
+          <tr><td>脂肪(Total Fat)</td><td class="num"><input id="in_fat" type="number" step="any" value="0.5"></td><td class="num" id="srv_fat">–</td><td class="num" id="dv_fat">–</td></tr>
+          <tr class="sub"><td>飽和脂肪(Saturated Fat)</td><td class="num"><input id="in_satfat" type="number" step="any" value="0.2"></td><td class="num" id="srv_satfat">–</td><td class="num" id="dv_satfat">–</td></tr>
+          <tr class="sub"><td>反式脂肪(Trans Fat)</td><td class="num"><input id="in_transfat" type="number" step="any" value="0"></td><td class="num" id="srv_transfat">–</td><td class="num">–</td></tr>
+          <tr><td>碳水化合物(Total Carbohydrate)</td><td class="num"><input id="in_carb" type="number" step="any" value="0.2"></td><td class="num" id="srv_carb">–</td><td class="num" id="dv_carb">–</td></tr>
+          <tr class="sub"><td>膳食纖維(Dietary Fiber)</td><td class="num"><input id="in_fiber" type="number" step="any" value="0"></td><td class="num" id="srv_fiber">–</td><td class="num" id="dv_fiber">–</td></tr>
+          <tr class="sub"><td>總糖(Total Sugars)</td><td class="num"><input id="in_sugars" type="number" step="any" value="0"></td><td class="num" id="srv_sugars">–</td><td class="num">–</td></tr>
+          <tr class="sub"><td>添加糖(Added Sugars)</td><td class="num"><input id="in_addsugars" type="number" step="any" value="0"></td><td class="num" id="srv_addsugars">–</td><td class="num" id="dv_addsugars">–</td></tr>
+          <tr><td>膽固醇(Cholesterol)</td><td class="num"><input id="in_chol" type="number" step="any" value="56.4"></td><td class="num" id="srv_chol">–</td><td class="num" id="dv_chol">–</td></tr>
+          <tr><td>鈉(Sodium)</td><td class="num"><input id="in_sodium" type="number" step="any" value="24.4"></td><td class="num" id="srv_sodium">–</td><td class="num" id="dv_sodium">–</td></tr>
+          <tr><td>維生素D(Vitamin D)</td><td class="num"><input id="in_vitd" type="number" step="any" value="3"></td><td class="num" id="srv_vitd">–</td><td class="num" id="dv_vitd">–</td></tr>
+          <tr><td>鈣(Calcium)</td><td class="num"><input id="in_calcium" type="number" step="any" value="3"></td><td class="num" id="srv_calcium">–</td><td class="num" id="dv_calcium">–</td></tr>
+          <tr><td>鐵(Iron)</td><td class="num"><input id="in_iron" type="number" step="any" value="0.5"></td><td class="num" id="srv_iron">–</td><td class="num" id="dv_iron">–</td></tr>
+          <tr><td>鉀(Potassium)</td><td class="num"><input id="in_potassium" type="number" step="any" value="483.1"></td><td class="num" id="srv_potassium">–</td><td class="num" id="dv_potassium">–</td></tr>
+        </tbody>
+      </table>
+      <p class="note">＊維生素及礦物質實際含量低於 RDI 的 2% 時，依 21 CFR 101.9(c)(8)(iii) 不強制標示，可選擇：標示修整後含量＋0% DV、含量與 DV% 皆標 0，或省略該列並加註「Not a significant source of ___」（可於上方選單切換）。<br>＊含量修整級距依 FDA 2018 指引：RDI &lt; 25 mg/mcg（維生素 D、鐵）取最接近 0.1；RDI ≥ 500 mg（鈣、鉀）取最接近 10 mg。<br>＊DV% 級距：≤10% 取最接近 2%；&gt;10%～50% 取最接近 5%；&gt;50% 取最接近 10%。<br>＊熱量 = 脂肪×9 +（碳水化合物−膳食纖維）×4 + 膳食纖維×2 + 蛋白質×4，依 FDA 規則修整。</p>
+    </div>
+
+  </div>
+
+  <div class="preview-col"><!-- 右欄：標籤預覽 -->
+    <div class="toolbar">
+      <button class="btn-primary" onclick="downloadPNG()">下載 PNG</button>
+      <button class="btn-ghost" onclick="window.print()">列印</button>
+    </div>
+
+    <div id="labelArea">
+      <div class="sheet notranslate" id="sheetArea" translate="no">
+        <div class="sheet-title">美國十四大營養標示</div>
+        <div class="sheet-sample"><span class="lab">樣品名稱：</span><span class="val" id="lbl_sample"></span></div>
+
+        <div class="nf" id="nfLabel" lang="en">
+          <div class="title">Nutrition Facts</div>
+          <div class="hr7"></div>
+          <div class="servings"><b id="lbl_spc">1</b> servings per container</div>
+          <div class="hrsep"></div>
+          <div class="servsize"><span>Serving size</span><span class="sz-val"><span id="lbl_amt">1</span> <span id="lbl_unit">slices</span> <span id="lbl_wt">(100g)</span></span></div>
+          <div class="hr7"></div>
+          <div class="aps">Amount per serving</div>
+          <div class="cal-row"><span class="cal-label">Calories</span><span class="cal-val" id="lbl_cal">0</span></div>
+          <div class="hr4"></div>
+          <div class="dv-head">% Daily Value*</div>
+
+          <div class="nrow"><span class="lft"><b>Total Fat</b><span class="val" id="lbl_fat"></span></span><span class="dv" id="lbl_fat_dv"></span></div>
+          <div class="nrow"><span class="lft ind">Saturated Fat<span class="val" id="lbl_satfat"></span></span><span class="dv" id="lbl_satfat_dv"></span></div>
+          <div class="nrow"><span class="lft ind"><i>Trans</i> Fat<span class="val" id="lbl_transfat"></span></span><span></span></div>
+          <div class="nrow"><span class="lft"><b>Cholesterol</b><span class="val" id="lbl_chol"></span></span><span class="dv" id="lbl_chol_dv"></span></div>
+          <div class="nrow"><span class="lft"><b>Sodium</b><span class="val" id="lbl_sodium"></span></span><span class="dv" id="lbl_sodium_dv"></span></div>
+          <div class="nrow"><span class="lft"><b>Total Carbohydrate</b><span class="val" id="lbl_carb"></span></span><span class="dv" id="lbl_carb_dv"></span></div>
+          <div class="nrow"><span class="lft ind">Dietary Fiber<span class="val" id="lbl_fiber"></span></span><span class="dv" id="lbl_fiber_dv"></span></div>
+          <div class="nrow"><span class="lft ind">Total Sugars<span class="val" id="lbl_sugars"></span></span><span></span></div>
+          <div class="nrow"><span class="lft ind2">Includes<span class="val" id="lbl_addsugars"></span> Added Sugars</span><span class="dv" id="lbl_addsugars_dv"></span></div>
+          <div class="nrow"><span class="lft"><b>Protein</b><span class="val" id="lbl_protein"></span></span><span></span></div>
+
+          <div class="hr7"></div>
+          <div class="nrow vmin" id="row_vitd" style="border-top:none;"><span class="lft">Vitamin D<span class="val" id="lbl_vitd"></span></span><span class="dv" id="lbl_vitd_dv"></span></div>
+          <div class="nrow vmin" id="row_calcium"><span class="lft">Calcium<span class="val" id="lbl_calcium"></span></span><span class="dv" id="lbl_calcium_dv"></span></div>
+          <div class="nrow vmin" id="row_iron"><span class="lft">Iron<span class="val" id="lbl_iron"></span></span><span class="dv" id="lbl_iron_dv"></span></div>
+          <div class="nrow vmin" id="row_potassium"><span class="lft">Potassium<span class="val" id="lbl_potassium"></span></span><span class="dv" id="lbl_potassium_dv"></span></div>
+          <div id="lbl_nsig" style="display:none;font-size:11px;border-top:1px solid #000;padding:2px 0;"></div>
+
+          <div class="foot"><span class="star">*</span> The % Daily Value (DV) tells you how much a nutrient in a serving of food contributes to a daily diet. 2,000 calories a day is used for general nutrition advice.</div>
+        </div>
+
+        <div class="sheet-foot">此營養標示所提供之換算結果與表格僅供參考，請以最新公告法規內容為準。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+"use strict";
+
+/* ---------- 工具函式（對應 Excel ROUND / MROUND，四捨五入採遠離零） ---------- */
+function xlround(v, d){
+  const f = Math.pow(10, d || 0);
+  return Math.sign(v) * Math.round(Math.abs(v) * f + 1e-9) / f;
+}
+function mround(v, m){ return xlround(v / m, 0) * m; }
+function num(id){ const v = parseFloat(document.getElementById(id).value); return isFinite(v) ? v : 0; }
+function fix(v, d){
+  const s = (Math.round(v * Math.pow(10,d) + 1e-9) / Math.pow(10,d)).toFixed(d);
+  // 只有含小數點時才去除尾端的 0（避免整數 250 被誤刪成 25）
+  return s.indexOf('.') >= 0 ? s.replace(/0+$/,'').replace(/\.$/,'') : s;
+}
+
+/* ---------- FDA 修整規則（完全對應 Excel 公式） ---------- */
+// 熱量：<5 → 0；≤50 → 取最接近 5；>50 → 取最接近 10
+function roundCalories(v){ return v < 5 ? 0 : (v <= 50 ? xlround(v/5,0)*5 : xlround(v/10,0)*10); }
+// 脂肪類：<0.5 → 0；<5 → 取最接近 0.5；≥5 → 取整數
+function roundFatType(v){ return v < 0.5 ? 0 : (v < 5 ? mround(v, 0.5) : xlround(v,0)); }
+// 碳水/糖/纖維：<0.5 → 0；<1 → 保留小數（標示 less than 1）；≥1 → 取整數
+function roundCarbType(v){ return v < 0.5 ? 0 : (v < 1 ? xlround(v,2) : xlround(v,0)); }
+// 蛋白質：<0.5 → 0；<1 → less than 1；≥1 → 取整數
+function roundProtein(v){ return v < 0.5 ? 0 : (v < 1 ? 0.99 : xlround(v,0)); }
+// 膽固醇：<2 → 0；≤5 → less than 5；>5 → 取最接近 5
+function roundChol(v){ return v < 2 ? 0 : (v <= 5 ? 0.99 : mround(v,5)); }
+// 鈉：<5 → 0；≤140 → 取最接近 5；>140 → 取最接近 10
+function roundSodium(v){ return v < 5 ? 0 : (v <= 140 ? xlround(v/5,0)*5 : xlround(v/10,0)*10); }
+// 維生素 D：取最接近 0.1
+function roundVitD(v){ return xlround(v/0.1,0)*0.1; }
+// 鈣、鉀（RDI ≥ 500 mg，FDA 2018 指引）：一律取最接近 10 mg
+function roundCaK(v){ return xlround(v/10,0)*10; }
+// 鐵（RDI < 25 mg，FDA 2018 指引）：一律取最接近 0.1 mg
+function roundIron(v){ return xlround(v/0.1,0)*0.1; }
+// 維生素/礦物質 DV%（21 CFR 101.9(c)(8)(iii)）：
+// ≤10% → 取最接近 2%；>10% 且 ≤50% → 取最接近 5%；>50% → 取最接近 10%
+function dvMineral(c, e){
+  const r = c / e;
+  if (r < 0.02)  return 0;
+  if (r <= 0.1)  return xlround(r*100/2,0)*2;
+  if (r <= 0.5)  return xlround(r*100/5,0)*5;
+  return xlround(r*100/10,0)*10;
+}
+// 主要營養素 DV%（= Excel ROUND(每份含量/DV, 2) 以 % 顯示）
+function dvMacro(c, e){ return xlround(c / e * 100, 0); }
+
+/* ---------- 標籤文字 ---------- */
+function fatText(v){ return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)) + 'g'; }
+function carbText(v, unit){
+  if (v === 0) return '0' + unit;
+  if (v < 1)  return 'less than 1' + unit;
+  return xlround(v,0) + unit;
+}
+function set(id, txt){ document.getElementById(id).textContent = txt; }
+
+/* ---------- 主計算 ---------- */
+function recalc(){
+  const W = num('servingWeight');           // 每份重量
+  const per = v => v / 100 * W;             // 每 100g 數值 → 每份
+
+  const protein = num('in_protein'), fat = num('in_fat'), satfat = num('in_satfat'),
+        transfat = num('in_transfat'), carb = num('in_carb'), sugars = num('in_sugars'),
+        addsug = num('in_addsugars'), chol = num('in_chol'), fiber = num('in_fiber'),
+        sodium = num('in_sodium'), vitd = num('in_vitd'), calcium = num('in_calcium'),
+        iron = num('in_iron'), potassium = num('in_potassium');
+
+  // 熱量（每 100g）
+  const rawCal = fat*9 + (carb - fiber)*4 + fiber*2 + protein*4;
+  const cCal = roundCalories(per(rawCal));
+
+  const cFat = roundFatType(per(fat));
+  const cSat = roundFatType(per(satfat));
+  const cTrans = roundFatType(per(transfat));
+  const cCarb = roundCarbType(per(carb));
+  const cSug = roundCarbType(per(sugars));
+  const cAdd = roundCarbType(per(addsug));
+  const cFib = roundCarbType(per(fiber));
+  const cChol = roundChol(per(chol));
+  const cSod = roundSodium(per(sodium));
+  const cPro = roundProtein(per(protein));
+  // DV%（主要營養素）
+  const dFat = dvMacro(cFat, 78), dSat = dvMacro(cSat, 20), dChol = dvMacro(cChol, 300),
+        dSod = dvMacro(cSod, 2300), dCarb = dvMacro(cCarb, 275), dFib = dvMacro(cFib, 28),
+        dAdd = dvMacro(cAdd, 50);
+
+  /* --- 維生素／礦物質（依 21 CFR 101.9(c)(8)(iii) 選擇的標示模式） --- */
+  const mode = document.getElementById('lt2Mode').value;
+  const minerals = [
+    {key:'vitd',      raw:per(vitd),      rdi:20,   round:roundVitD, unit:'mcg', dec:1, name:'vitamin D'},
+    {key:'calcium',   raw:per(calcium),   rdi:1300, round:roundCaK,  unit:'mg',  dec:0, name:'calcium'},
+    {key:'iron',      raw:per(iron),      rdi:18,   round:roundIron, unit:'mg',  dec:1, name:'iron'},
+    {key:'potassium', raw:per(potassium), rdi:4700, round:roundCaK,  unit:'mg',  dec:0, name:'potassium'}
+  ];
+  const omitted = [];
+  minerals.forEach(m => {
+    const lt2 = m.raw / m.rdi < 0.02;   // 實際含量（修整前）低於 2% RDI
+    let amt = m.round(m.raw);
+    let dv  = lt2 ? 0 : dvMineral(amt, m.rdi);
+    if (lt2 && mode === 'zero') amt = 0;
+    const row = document.getElementById('row_' + m.key);
+    if (lt2 && mode === 'omit'){ row.style.display = 'none'; omitted.push(m.name); }
+    else row.style.display = 'flex';
+    set('srv_' + m.key, fix(amt, m.dec));
+    set('dv_'  + m.key, dv + '%');
+    set('lbl_' + m.key, fix(amt, m.dec) + m.unit);
+    set('lbl_' + m.key + '_dv', dv + '%');
+  });
+  const nsig = document.getElementById('lbl_nsig');
+  if (omitted.length){
+    nsig.style.display = 'block';
+    nsig.textContent = 'Not a significant source of ' + omitted.join(', ') + '.';
+  } else {
+    nsig.style.display = 'none';
+  }
+
+  /* --- 計算明細表 --- */
+  set('rawCal', fix(rawCal,1)); set('srvCal', cCal);
+  set('srv_protein', cPro === 0.99 ? '<1' : fix(cPro,2));
+  set('srv_fat', cFat.toFixed(1)); set('dv_fat', dFat + '%');
+  set('srv_satfat', cSat.toFixed(1)); set('dv_satfat', dSat + '%');
+  set('srv_transfat', cTrans.toFixed(1));
+  set('srv_carb', fix(cCarb,2)); set('dv_carb', dCarb + '%');
+  set('srv_fiber', fix(cFib,2)); set('dv_fiber', dFib + '%');
+  set('srv_sugars', fix(cSug,2));
+  set('srv_addsugars', fix(cAdd,2)); set('dv_addsugars', dAdd + '%');
+  set('srv_chol', cChol === 0.99 ? '<5' : fix(cChol,0)); set('dv_chol', dChol + '%');
+  set('srv_sodium', fix(cSod,0)); set('dv_sodium', dSod + '%');
+
+  /* --- 標籤 --- */
+  const spc = document.getElementById('servingsPerContainer').value || '1';
+  const amt = document.getElementById('servingAmount').value || '1';
+  const unitSel = document.getElementById('servingUnitSelect');
+  const unit = unitSel.value === '__custom'
+      ? (document.getElementById('servingUnitCustom').value || '')
+      : unitSel.value;
+  const wUnit = document.getElementById('weightUnit').value;
+
+  set('lbl_spc', spc);
+  set('lbl_amt', amt);
+  set('lbl_unit', unit);
+  set('lbl_wt', '(' + W + wUnit + ')');
+  set('lbl_cal', cCal);
+
+  set('lbl_fat', fatText(cFat)); set('lbl_fat_dv', dFat + '%');
+  set('lbl_satfat', fatText(cSat)); set('lbl_satfat_dv', dSat + '%');
+  set('lbl_transfat', fatText(cTrans));
+  set('lbl_chol', cChol === 0 ? '0mg' : (cChol < 1 ? 'less than 5mg' : xlround(cChol,0) + 'mg'));
+  set('lbl_chol_dv', dChol + '%');
+  set('lbl_sodium', fix(cSod,0) + 'mg'); set('lbl_sodium_dv', dSod + '%');
+  set('lbl_carb', carbText(cCarb,'g')); set('lbl_carb_dv', dCarb + '%');
+  set('lbl_fiber', carbText(cFib,'g')); set('lbl_fiber_dv', dFib + '%');
+  set('lbl_sugars', carbText(cSug,'g'));
+  set('lbl_addsugars', carbText(cAdd,'g')); set('lbl_addsugars_dv', dAdd + '%');
+  set('lbl_protein', cPro === 0.99 ? 'less than 1g' : xlround(cPro,0) + 'g');
+
+  const sampleName = document.getElementById('sampleName').value.trim();
+  set('lbl_sample', sampleName);
+}
+
+/* ---------- 下載 PNG ---------- */
+function downloadPNG(){
+  const sheet = document.getElementById('sheetArea');
+  const run = () => html2canvas(sheet, {scale: 4, backgroundColor: '#ffffff'}).then(canvas => {
+    const a = document.createElement('a');
+    const name = document.getElementById('sampleName').value.trim() || 'nutrition-facts';
+    a.download = name + '.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  }).catch(() => alert('PNG 產生失敗，請改用「列印」功能另存 PDF。'));
+  // 確保 Archivo Black / Arimo 字體已載入，避免截圖到未換字的畫面
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(run);
+  else run();
+}
+
+/* ---------- 事件綁定 ---------- */
+document.querySelectorAll('input, select').forEach(el => {
+  el.addEventListener('input', recalc);
+  el.addEventListener('change', recalc);
+});
+document.getElementById('servingUnitSelect').addEventListener('change', function(){
+  document.getElementById('servingUnitCustom').style.display =
+    this.value === '__custom' ? 'block' : 'none';
+  recalc();
+});
+
+recalc();
+</script>
+</body>
+</html>
