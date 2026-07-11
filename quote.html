@@ -1485,10 +1485,13 @@ function confirmPrint() {
 
   const oldTitle = document.title;
   document.title = buildPdfFilename().replace(/\.pdf$/, '');
-  setTimeout(() => {
-    window.print();
-    document.title = oldTitle;
-  }, 50);
+  // window.print() 一定要留在跟按鈕點擊同一個「使用者手勢」的呼叫鏈裡、
+  // 同步呼叫，中間不能包 setTimeout／Promise 之類的非同步延遲——手機
+  // Safari（iOS）對這點管得比電腦版嚴格，只要延遲個幾十毫秒才呼叫
+  // window.print()，就會判定「不是使用者手勢觸發的」而整個悄悄無視掉，
+  // 畫面上不會有任何錯誤訊息，看起來就像「按了沒反應」。
+  window.print();
+  document.title = oldTitle;
 }
 
 // ============================================================
