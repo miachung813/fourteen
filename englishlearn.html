@@ -957,6 +957,28 @@ function showCloudSyncModal(){
   btnRow.appendChild(saveBtn);
   btnRow.appendChild(cancelBtn);
   card.appendChild(btnRow);
+
+  // 如果目前已經設定好雲端同步網址，額外提供「複製個人同步連結」：把目前這個網址設定成 ?sync= 參數，
+  // 之後在自己的其他裝置／瀏覽器（例如用 LINE 傳給自己的手機）打開這個連結，會自動幫忙填好雲端同步設定，
+  // 不用每次手動貼一次。提醒：這個連結只適合傳給自己，傳給別人會變成大家同步到同一份試算表、互相覆蓋進度。
+  const currentUrl = getSheetUrl();
+  if(currentUrl){
+    const linkWrap = el('div',{style:'margin-top:14px;padding-top:12px;border-top:1px solid var(--line);'});
+    linkWrap.appendChild(el('p',{class:'muted small'},['想在自己的其他裝置或瀏覽器（例如用 LINE 傳給自己的手機）打開就自動接上同一份雲端進度嗎？可以複製下面這個「個人同步連結」，只適合傳給自己，傳給別人會變成同步到同一份進度、互相覆蓋。']));
+    const copyBtn = el('button',{class:'btn small'},['📋 複製我的個人同步連結']);
+    copyBtn.addEventListener('click', ()=>{
+      const personalLink = location.origin + location.pathname + '?sync=' + encodeURIComponent(currentUrl);
+      copyToClipboard(personalLink, (ok)=>{
+        copyBtn.textContent = ok ? '✅ 已複製，貼到 LINE 傳給自己吧' : '複製失敗，請手動選取下面網址';
+        if(!ok){
+          linkWrap.appendChild(el('p',{class:'small', style:'word-break:break-all;'},[personalLink]));
+        }
+      });
+    });
+    linkWrap.appendChild(copyBtn);
+    card.appendChild(linkWrap);
+  }
+
   overlay.appendChild(card);
   overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.remove(); });
   document.body.appendChild(overlay);
@@ -1503,6 +1525,7 @@ function renderGuide(root){
     el('p',{},['三個分頁最上面都會出現「⭐ 不熟單字複習」卡片，列出目前所有標記過的單字（只顯示英文和詞性、以及複習進度，不會先顯示中文意思，避免看到答案），按「開始複習測驗 →」就會出一份複習測驗（最多 10 題），送出測驗後才會告訴你每題對不對。如果這個字剛好在單字表裡，會出「選中文意思」的選擇題自動判斷對錯；如果是直接從文章裡標記、不在單字表裡的字（例如人名、少見的字），會改成先聽發音，再自己勾選「記住了」或「還不熟」。不管哪一種，答對一次進度會 +1，連續答對 2 次系統就會自動把這個字從清單畢業移除，答錯則進度歸零、下次要重新累積。']),
     el('p',{},['提醒：這份不熟單字清單和其他學習進度一樣，只存在這個瀏覽器裡；如果想在不同裝置或瀏覽器之間同步，需要先設定好 Google 試算表雲端同步（同步狀態會顯示在各分頁最上方），沒有設定的話清除瀏覽器資料或換裝置就會遺失記錄。']),
     el('p',{},['如果最上面的同步狀態顯示「☁️ 尚未設定雲端同步」，點一下那行文字就可以貼上（或更新）你的 Google Apps Script 網址重新設定；換了瀏覽器、裝置，或把這個檔案搬到不同網址（例如從本機測試換成正式上傳到網站）都需要重新貼一次，因為這個網址是存在瀏覽器裡，不會跟著檔案內容走。']),
+    el('p',{},['小技巧：設定好之後，同一個小視窗裡會出現「📋 複製我的個人同步連結」按鈕，複製起來傳給自己（例如用 LINE 傳給自己的手機），下次用那個連結打開就會自動接上同一份雲端進度，不用每次手動重新貼網址；但這個連結只適合傳給自己，傳給別人會變成同步到同一份進度、互相覆蓋，不要傳給同學喔。']),
     el('h3',{},['🖱️ 文章點字發音＋畫底線＋標記不熟']),
     el('p',{},['「世界故事集」「經典故事」「每日故事」裡的文章內文，每一個英文字都可以直接點一下，瀏覽器就會唸出這個字（用的是同一套朗讀設定，語速、語音都相同）。']),
     el('p',{},['如果想在文章上標記重點，用滑鼠拖曳（手機／平板用手指滑動）選取一段文字，放開之後這段文字就會自動加上底線，像用螢光筆畫重點一樣；可以連續選好幾個字（例如 "ice cream"、"police officer" 這種算一個詞的片語就可以整個一起選起來連在一起）；再選取同一段文字一次，就會取消底線。']),
@@ -1515,11 +1538,25 @@ function renderGuide(root){
   ]));
 }
 
+// 如果網址帶了 ?sync=你的Apps Script網址，就自動把這個網址存進這個瀏覽器的雲端同步設定，
+// 不用手動點開小視窗貼網址。這是專門給「同一個人、換裝置或換瀏覽器打開」用的個人專屬連結
+// （例如用 LINE 傳給自己的手機），讓進度不用每次手動重新設定就能自動接上同一份雲端試算表。
+// 注意：這個網址參數只是「自動幫你填好雲端同步設定」，不是把進度存在網址裡——如果把這個連結
+// 分享給別人，對方也會連到同一份雲端試算表，兩個人的進度會互相覆蓋，所以只適合傳給自己用。
+function seedSheetUrlFromQueryIfPresent(){
+  try{
+    const params = new URLSearchParams(location.search);
+    const fromQuery = (params.get('sync')||'').trim();
+    if(fromQuery) setSheetUrl(fromQuery);
+  }catch(e){ /* 忽略網址參數解析失敗，不影響原本已存的雲端同步設定 */ }
+}
+
 /* ---------- Init ---------- */
 function startApp(){
   initTtsControls();
   initStoryTextInteractions();
   initCloudSyncIndicatorClick();
+  seedSheetUrlFromQueryIfPresent();
   window.addEventListener('hashchange', render);
   // 每次「打開」這個網頁（重新整理、從書籤／主畫面圖示開啟等）都固定先顯示世界故事集，
   // 不要沿用瀏覽器網址列殘留的上次分頁 hash（例如上次逛到「每日故事」，網址列殘留 #vocab，
