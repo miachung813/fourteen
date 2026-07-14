@@ -39,6 +39,26 @@ body{
 .lock-card h2{margin:0 0 6px;}
 .lock-card .input-text{width:100%; margin:14px 0 10px; text-align:center; font-size:16px;}
 .lock-card .btn{width:100%;}
+.celebrate-overlay{
+  position:fixed; inset:0;
+  background:rgba(45,42,38,.55);
+  display:flex; align-items:center; justify-content:center;
+  z-index:300; padding:20px;
+}
+.celebrate-card{
+  background:var(--card); border-radius:var(--radius);
+  padding:32px 28px; max-width:340px; width:100%;
+  text-align:center; box-shadow:0 12px 40px rgba(0,0,0,.3);
+  animation:celebrate-pop .35s ease;
+}
+.celebrate-emoji{font-size:52px; line-height:1; margin-bottom:8px;}
+.celebrate-card h2{margin:0 0 10px;}
+.celebrate-card p{margin:0 0 8px;}
+.celebrate-card .btn{margin-top:10px; width:100%;}
+@keyframes celebrate-pop{
+  from{ transform:scale(.85); opacity:0; }
+  to{ transform:scale(1); opacity:1; }
+}
 header.topbar{
   background:linear-gradient(135deg,#c96f4a,#a8562f);
   color:#fff;
@@ -132,6 +152,15 @@ main{max-width:960px; margin:0 auto; padding:16px 14px 60px;}
 .speak-btn:hover{filter:brightness(.96);}
 .speak-btn.small{width:22px; height:22px; font-size:12px;}
 .speak-btn.playing{background:var(--brand); border-color:var(--brand); color:#fff;}
+.weak-btn{
+  background:#fff; border:1px solid var(--line); color:#c9a227;
+  width:28px; height:28px; border-radius:50%; cursor:pointer;
+  font-size:15px; line-height:1; display:inline-flex; align-items:center; justify-content:center;
+  padding:0; vertical-align:middle;
+}
+.weak-btn:hover{filter:brightness(.96);}
+.weak-btn.flagged{background:#fff6dc; border-color:#f0d778; color:#c9a227;}
+.weak-btn.small{width:22px; height:22px; font-size:13px;}
 .input-num{width:80px; padding:6px 8px; border-radius:8px; border:1px solid var(--line);}
 .input-text{padding:8px 10px; border-radius:8px; border:1px solid var(--line); font-size:14px; flex:1; min-width:140px;}
 select.input-text{flex:0 0 auto;}
@@ -172,7 +201,10 @@ span.en.big{font-size:18px; font-weight:700; color:var(--brand-dark);}
 
 .story-card{display:flex; flex-direction:column; gap:4px;}
 .story-p{font-size:15px; margin:0 0 12px; text-align:justify;}
-mark.hlword{background:#ffe3c2; color:var(--brand-dark); font-weight:700; padding:0 3px; border-radius:4px;}
+.word-click{cursor:pointer; border-radius:3px;}
+.word-click:hover{background:#f0e6d6;}
+.word-click.underlined{text-decoration:underline; text-decoration-color:var(--brand); text-decoration-thickness:2.5px; text-underline-offset:2px;}
+.word-click.weak-word-flagged{background:#fdecea; text-decoration:underline wavy var(--bad); text-decoration-thickness:1.5px; text-underline-offset:3px;}
 .vocab-tags{display:flex; flex-wrap:wrap; gap:8px;}
 .tag{background:#f4efe6; border-radius:999px; padding:5px 6px 5px 12px; font-size:13px; display:inline-flex; align-items:center; gap:4px;}
 
@@ -305,6 +337,8 @@ const DEFAULT_STATE = () => ({
   storybookSentences: {},        // {"storyId_wordIndex": "使用者造的句子"}（重點單字造句）
   storybookRefSentences: {},     // {"storyId_wordIndex": "使用者造的句子"}（參考單字造句）
   readingSentences: {},          // {"storyId_wordIndex": "使用者造的句子"}（經典故事重點單字造句）
+  weakWords: {},                 // {"source:key": {source, w, pos, m, streak}} 使用者標記的不熟單字，跨每日故事／經典故事／世界故事集
+  underlines: {},                // {"paraKey": [wordIdx, ...]} 使用者在文章裡選取畫的底線標記（依段落、以單字索引記錄）
   streakDates: [],               // ["2026-07-13", ...] 只作記錄用，不影響進度
   createdAt: new Date().toISOString()
 });
@@ -335,10 +369,153 @@ function markTodayActive(){
 function escapeHtml(s){
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
-// Converts **word** markdown-style bolding into highlighted <mark> spans, safely escaping the rest.
-function renderStoryHtml(text){
-  const escaped = escapeHtml(text);
-  return escaped.replace(/\*\*(.+?)\*\*/g, '<mark class="hlword">$1</mark>');
+function escapeAttr(s){
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+}
+
+/* ---------- 文章：逐字點擊發音 ＋ 選取畫底線 ---------- */
+// STATE.underlines[paraKey] = [wordIdx, ...] 記錄這個段落裡哪些「字」被畫了底線（依單字索引，不是字元位置）。
+function isUnderlined(paraKey, idx){
+  const arr = STATE.underlines[paraKey];
+  return !!arr && arr.indexOf(idx) !== -1;
+}
+// 切換某個段落裡 [startIdx, endIdx] 這段字的底線標記：如果整段都已經畫了底線就取消，否則就補上整段。
+function toggleUnderlineRange(paraKey, startIdx, endIdx){
+  const cur = STATE.underlines[paraKey] ? STATE.underlines[paraKey].slice() : [];
+  const idxs = [];
+  for(let i=startIdx;i<=endIdx;i++) idxs.push(i);
+  const allAlready = idxs.every(i=> cur.indexOf(i)!==-1);
+  let next;
+  if(allAlready){
+    next = cur.filter(i=> idxs.indexOf(i)===-1);
+  } else {
+    next = cur.slice();
+    idxs.forEach(i=>{ if(next.indexOf(i)===-1) next.push(i); });
+  }
+  next.sort((a,b)=>a-b);
+  if(next.length){ STATE.underlines[paraKey] = next; } else { delete STATE.underlines[paraKey]; }
+}
+// 把一段文章文字轉成 HTML：每個英文字都包成可點擊發音的元素（**word** 標記只用來去掉星號，
+// 不再另外加螢光背景——使用者說會自己用選取畫底線的方式標記，所以這裡統一處理，不特別上色），
+// 並疊加使用者用滑鼠選取畫出的底線標記（依 paraKey 這個段落的專屬 key 存取 STATE.underlines）。
+function buildParaHtml(text, paraKey){
+  // 注意：非文字／非底線收尾的第三組一定要排除 "*"，不然 "**" 標記會被這組先吃掉，
+  // 讓後面配對的粗體規則永遠對不到開頭，導致一整段（甚至到下一組 **）被誤判成同一個詞。
+  const re = /\*\*([^*]+)\*\*|([A-Za-z']+)|([^A-Za-z'*]+)|(\*)/g;
+  let out = '';
+  let widx = 0;
+  let m;
+  while((m = re.exec(text))){
+    const w = m[1]!=null ? m[1] : m[2];
+    if(w!=null){
+      const underlined = isUnderlined(paraKey, widx);
+      const weakFlagged = isWeakFlagged('article', paraKey+':'+widx);
+      const cls = 'word-click'+(underlined?' underlined':'')+(weakFlagged?' weak-word-flagged':'');
+      out += `<span class="${cls}" data-word="${escapeAttr(w)}" data-para="${escapeAttr(paraKey)}" data-widx="${widx}">${escapeHtml(w)}</span>`;
+      widx++;
+    } else {
+      out += escapeHtml(m[3]!=null ? m[3] : m[4]);
+    }
+  }
+  return out;
+}
+// 在 VOCAB（2000 單字總表）裡找這個字對應的詞性／中文意思（不分大小寫比對）；
+// 文章裡有些字本來就不在單字表裡（介係詞、專有名詞等），找不到就回傳空字串，複習測驗時會改用「自我勾選」的方式。
+function findVocabMeaning(word){
+  const lower = String(word).toLowerCase();
+  const hit = VOCAB.find(v=> v.w.toLowerCase()===lower);
+  return hit ? {pos:hit.pos, m:hit.m} : {pos:'', m:''};
+}
+// 文章裡任何一個字都可以直接標記「不熟」，不再限定只有重點單字／參考單字才能標記。
+// key 用「段落key:字的索引」組成，跟畫底線共用同一套 data-para/data-widx 定位方式。
+function toggleArticleWeakWord(target){
+  const paraKey = target.getAttribute('data-para');
+  const widx = target.getAttribute('data-widx');
+  const word = target.getAttribute('data-word');
+  if(!paraKey || widx==null || !word) return;
+  const key = paraKey+':'+widx;
+  if(isWeakFlagged('article', key)){
+    unflagWeak('article', key);
+  } else {
+    const meta = findVocabMeaning(word);
+    flagWeak('article', key, {w:word, pos:meta.pos, m:meta.m});
+  }
+  render();
+}
+// 底線拖曳選字：不依賴瀏覽器自己的 window.getSelection()（實測發現雙擊過一次之後，瀏覽器會把
+// 「選字最小單位」記成「整個詞／句子」，緊接著的拖曳選字會被瀏覽器自己誤判成選了一大段，不可靠），
+// 改成完全自己追蹤滑鼠位置：mousedown 記下起點是哪個字，mouseup 時看放開時在哪個字上面，
+// 兩者之間的字就是要畫底線的範圍，準確且不受瀏覽器內部選字狀態影響。
+let wordClickSuppressed = false;
+let storyDragStart = null;   // {paraKey, widx, x, y} 記下 mousedown 當時是哪個字
+let storyLastHoveredWord = null; // 記下滑鼠拖曳過程中最後經過的 .word-click 元素，讓放開時稍微超出字的範圍也抓得到
+function handleStoryMouseDown(e){
+  const target = e.target.closest && e.target.closest('.word-click');
+  storyDragStart = target ? {
+    paraKey: target.getAttribute('data-para'),
+    widx: parseInt(target.getAttribute('data-widx'),10),
+    x: e.clientX, y: e.clientY
+  } : {paraKey:null, widx:NaN, x:e.clientX, y:e.clientY};
+  storyLastHoveredWord = target || null;
+  // 我們自己用 mousemove/mouseup 追蹤拖曳範圍，不需要瀏覽器原生的文字選取反白；
+  // 阻止原生選字可以避免拖曳過程中瀏覽器自己的選字反白造成排版跳動、連帶讓座標對應到錯的字。
+  if(target) e.preventDefault();
+}
+function handleStoryMouseMove(e){
+  const target = e.target.closest && e.target.closest('.word-click');
+  if(target) storyLastHoveredWord = target;
+}
+function handleStoryMouseUp(e){
+  const start = storyDragStart;
+  storyDragStart = null;
+  // 保險：清掉瀏覽器拖曳過程中自己產生的原生選字反白，我們自己算範圍，不需要瀏覽器的選字結果。
+  const sel = window.getSelection();
+  if(sel && !sel.isCollapsed) sel.removeAllRanges();
+  if(!start || !start.paraKey) return;
+  const moved = Math.abs(e.clientX-start.x)>4 || Math.abs(e.clientY-start.y)>4;
+  if(!moved) return; // 沒有真的拖曳，交給 click／dblclick 處理
+  const endTarget = (e.target.closest && e.target.closest('.word-click')) || storyLastHoveredWord;
+  if(!endTarget) return;
+  const endParaKey = endTarget.getAttribute('data-para');
+  if(endParaKey !== start.paraKey) return; // 跨段落拖曳不處理，避免混亂
+  let startIdx = start.widx;
+  let endIdx = parseInt(endTarget.getAttribute('data-widx'),10);
+  if(isNaN(startIdx) || isNaN(endIdx)) return;
+  if(startIdx>endIdx){ const t=startIdx; startIdx=endIdx; endIdx=t; }
+  toggleUnderlineRange(start.paraKey, startIdx, endIdx);
+  wordClickSuppressed = true;
+  render();
+}
+// 點一下文章裡的字就唸出這個字；用短暫延遲判斷是不是雙擊，如果是雙擊就交給 handleWordDblClick 處理，不要唸兩次。
+// （拖曳選字畫底線之後放開滑鼠也會觸發 click，用 wordClickSuppressed 擋掉，避免誤唸。）
+let wordClickTimer = null;
+function handleWordClick(e){
+  if(wordClickSuppressed){ wordClickSuppressed = false; return; }
+  const target = e.target.closest && e.target.closest('.word-click');
+  if(!target) return;
+  if(wordClickTimer){ clearTimeout(wordClickTimer); wordClickTimer = null; return; }
+  wordClickTimer = setTimeout(()=>{
+    wordClickTimer = null;
+    const word = target.getAttribute('data-word');
+    if(word) speakText(word, {}, null);
+  }, 260);
+}
+// 快速點兩下文章裡的某個字：把這個字標記為「不熟」（不限定要不要是重點單字），加進「⭐ 不熟單字複習」清單；
+// 已經標記過的字再點兩下就取消標記。
+function handleWordDblClick(e){
+  const target = e.target.closest && e.target.closest('.word-click');
+  if(!target) return;
+  if(wordClickTimer){ clearTimeout(wordClickTimer); wordClickTimer = null; }
+  const sel = window.getSelection();
+  if(sel) sel.removeAllRanges();
+  toggleArticleWeakWord(target);
+}
+function initStoryTextInteractions(){
+  document.addEventListener('mousedown', handleStoryMouseDown);
+  document.addEventListener('mousemove', handleStoryMouseMove);
+  document.addEventListener('mouseup', handleStoryMouseUp);
+  document.addEventListener('click', handleWordClick);
+  document.addEventListener('dblclick', handleWordDblClick);
 }
 // Builds a "顯示中文翻譯" toggle button + hidden translation block.
 // zhContent can be a single string (daily story) or an array of paragraph strings (classic story).
@@ -466,6 +643,176 @@ function initTtsControls(){
   }
 }
 
+/* ---------- 完成鼓勵畫面（完成一篇故事進度、或送出測驗之後顯示） ---------- */
+const CELEBRATE_MESSAGES = [
+  '太棒了，你今天又進步了一點！',
+  '做得很好，繼續保持這個節奏！',
+  '你真的很努力，值得鼓勵！',
+  '完成了！你離目標又近一步了。',
+  '很棒的表現，你做到了！',
+  '持之以恆，你正在養成很棒的習慣！',
+  '真厲害，繼續加油！',
+  '你比昨天更進步了一點！'
+];
+const CELEBRATE_EMOJIS = ['🎉','🌟','👏','💪','✨','🏆','🥳','🔥'];
+
+// opts: {title, message, detail}；title/message 沒給的話會隨機挑一句鼓勵的話。
+function showCelebration(opts){
+  opts = opts || {};
+  const existing = document.getElementById('celebrateOverlay');
+  if(existing) existing.remove();
+
+  const emoji = CELEBRATE_EMOJIS[Math.floor(Math.random()*CELEBRATE_EMOJIS.length)];
+  const msg = opts.message || CELEBRATE_MESSAGES[Math.floor(Math.random()*CELEBRATE_MESSAGES.length)];
+
+  const overlay = el('div',{id:'celebrateOverlay', class:'celebrate-overlay'});
+  const card = el('div',{class:'celebrate-card'});
+  card.appendChild(el('div',{class:'celebrate-emoji'},[emoji]));
+  card.appendChild(el('h2',{},[opts.title || '完成了！']));
+  card.appendChild(el('p',{},[msg]));
+  if(opts.detail){
+    card.appendChild(el('p',{class:'muted'},[opts.detail]));
+  }
+  card.appendChild(el('button',{class:'btn primary', onclick:()=> overlay.remove()},['繼續 →']));
+  overlay.appendChild(card);
+  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+
+  // 保險機制：就算使用者沒點「繼續」，畫面也不會卡住太久。
+  setTimeout(()=>{ if(document.getElementById('celebrateOverlay')===overlay) overlay.remove(); }, 4500);
+}
+
+/* ---------- 不熟單字標記（跨每日故事／經典故事／世界故事集，統一存進 STATE.weakWords） ---------- */
+function weakKey(source, key){ return source+':'+key; }
+function isWeakFlagged(source, key){ return !!STATE.weakWords[weakKey(source,key)]; }
+function flagWeak(source, key, wordData){
+  const k = weakKey(source, key);
+  const existing = STATE.weakWords[k];
+  STATE.weakWords[k] = {source, w:wordData.w, pos:wordData.pos||'', m:wordData.m, streak: existing ? existing.streak : 0};
+}
+function unflagWeak(source, key){
+  delete STATE.weakWords[weakKey(source, key)];
+}
+// 小小的星星按鈕：標記／取消標記「不熟」。標記過的字會出現在「每日故事」分頁的「⭐ 不熟單字複習」清單裡。
+function buildWeakToggleBtn(source, key, wordData){
+  const flagged = isWeakFlagged(source, key);
+  return el('button',{class:'weak-btn'+(flagged?' flagged':''), title: flagged?'已標記不熟（點一下取消標記）':'標記為不熟單字，加入複習清單', onclick:(e)=>{
+    if(e) e.stopPropagation();
+    if(isWeakFlagged(source, key)){ unflagWeak(source, key); }
+    else { flagWeak(source, key, wordData); }
+    render();
+  }},[flagged?'⭐':'☆']);
+}
+
+// 是否正在「每日故事」分頁顯示不熟單字的複習測驗（false＝顯示清單卡片）
+let weakReviewOpen = false;
+
+// 「每日故事」分頁頂端的卡片：列出目前所有標記為不熟的單字（跨三個分頁），
+// 顯示每個字目前的複習進度（連續答對次數／2），並提供「開始複習測驗」按鈕。
+function buildWeakWordsReviewCard(){
+  const card = el('div',{class:'card highlight'});
+  const entries = Object.keys(STATE.weakWords).map(k=>({key:k, ...STATE.weakWords[k]}));
+  card.appendChild(el('h3',{},['⭐ 不熟單字複習']));
+  if(entries.length===0){
+    card.appendChild(el('p',{class:'muted'},['在「每日故事」「經典故事」「世界故事集」看到不熟悉的單字時，按一下旁邊的 ☆ 就會把它加進這裡。之後可以隨時回來這裡做複習測驗，連續答對 2 次系統就會把它畢業，不用手動整理。目前還沒有標記任何單字。']));
+    return card;
+  }
+  card.appendChild(el('p',{class:'muted'},[`目前共標記了 ${entries.length} 個不熟單字，複習測驗連續答對 2 次即可畢業（自動從清單移除）。這裡先不顯示中文意思，進去測驗時再幫你核對答案。`]));
+  const tagWrap = el('div',{class:'vocab-tags'});
+  entries.forEach(en=>{
+    tagWrap.appendChild(el('span',{class:'tag'},[
+      `${en.w}${en.pos?(' ('+en.pos+')'):''}　[${en.streak||0}/2]`,
+    ]));
+  });
+  card.appendChild(tagWrap);
+  card.appendChild(el('button',{class:'btn primary', style:'margin-top:10px;', onclick:()=>{ weakReviewOpen=true; render(); }},['開始複習測驗 →']));
+  return card;
+}
+
+// 不熟單字的複習測驗：單字 → 中文意思的選擇題，最多抽 10 題。
+// 答對就讓該字的 streak +1，streak 達到 2 即從 STATE.weakWords 畢業移除；答錯則 streak 歸零。
+function buildWeakReviewQuiz(){
+  const card = el('div',{class:'card highlight'});
+  card.appendChild(el('div',{class:'row space-between'},[
+    el('h3',{},['⭐ 不熟單字複習測驗']),
+    el('button',{class:'btn small', onclick:()=>{ weakReviewOpen=false; render(); }},['← 返回清單']),
+  ]));
+  const entries = Object.keys(STATE.weakWords).map(k=>({key:k, ...STATE.weakWords[k]}));
+  if(entries.length===0){
+    card.appendChild(el('p',{class:'muted'},['目前沒有標記任何不熟單字，先去每日故事／經典故事／世界故事集裡標記幾個吧！']));
+    return card;
+  }
+  const quizEntries = shuffle(entries).slice(0, Math.min(10, entries.length));
+  const answers = {};
+  const form = el('div',{class:'quiz-form'});
+  quizEntries.forEach((en, idx)=>{
+    const qDiv = el('div',{class:'quiz-q'});
+    const optDiv = el('div',{class:'quiz-options'});
+    if(en.m){
+      // 單字表裡有對應的中文意思：出選擇題，自動判斷對錯。
+      let distractors = shuffle(VOCAB.filter(v=> v.m!==en.m && (!en.pos || v.pos===en.pos))).slice(0,3);
+      if(distractors.length<3){ distractors = shuffle(VOCAB.filter(v=>v.m!==en.m)).slice(0,3); }
+      const options = shuffle([{id:'correct', m:en.m}, ...distractors.map((d,i)=>({id:'d'+i, m:d.m}))]);
+      qDiv.appendChild(el('div',{class:'quiz-question'},[`${idx+1}. ${en.w}${en.pos?(' ('+en.pos+')'):''} 是什麼意思？`]));
+      options.forEach(o=>{
+        const label = el('label',{class:'quiz-opt'});
+        const radio = el('input',{type:'radio', name:'wq'+idx});
+        radio.addEventListener('change', ()=>{ answers[en.key] = o.id; });
+        label.appendChild(radio);
+        label.appendChild(document.createTextNode(' '+o.m));
+        optDiv.appendChild(label);
+      });
+    } else {
+      // 這個字是直接從文章裡標記的、不在單字表裡，沒有現成的中文意思可以出選擇題，
+      // 改成「聽發音＋自己勾選記住了沒」的方式，一樣算進答對／答錯與連續次數。
+      const qHeader = el('div',{class:'quiz-question row gap'},[
+        document.createTextNode(`${idx+1}. ${en.w}（這個字不在單字表裡，先聽聽看再自己判斷）`),
+      ]);
+      qHeader.appendChild(buildSpeakBtn(en.w, {small:true}));
+      qDiv.appendChild(qHeader);
+      [['correct','✅ 我記住這個字的意思了'],['wrong','😵 還是不太熟']].forEach(pair=>{
+        const label = el('label',{class:'quiz-opt'});
+        const radio = el('input',{type:'radio', name:'wq'+idx});
+        radio.addEventListener('change', ()=>{ answers[en.key] = pair[0]; });
+        label.appendChild(radio);
+        label.appendChild(document.createTextNode(' '+pair[1]));
+        optDiv.appendChild(label);
+      });
+    }
+    qDiv.appendChild(optDiv);
+    form.appendChild(qDiv);
+  });
+  card.appendChild(form);
+  const resultBox = el('div',{class:'quiz-result'});
+  card.appendChild(resultBox);
+  card.appendChild(el('button',{class:'btn primary', onclick:()=>{
+    let correct=0, graduated=0;
+    quizEntries.forEach(en=>{
+      const entry = STATE.weakWords[en.key];
+      if(!entry) return;
+      if(answers[en.key]==='correct'){
+        correct++;
+        entry.streak = (entry.streak||0)+1;
+        if(entry.streak>=2){ delete STATE.weakWords[en.key]; graduated++; }
+      } else {
+        entry.streak = 0;
+      }
+    });
+    resultBox.innerHTML='';
+    resultBox.appendChild(el('p',{class: correct===quizEntries.length?'good':'muted'},[`得分：${correct} / ${quizEntries.length}`]));
+    if(graduated>0){
+      resultBox.appendChild(el('p',{class:'good'},[`🎓 有 ${graduated} 個單字已經連續答對 2 次，畢業啦！`]));
+    }
+    scheduleCloudSave();
+    showCelebration({
+      title: graduated>0 ? '太棒了，又有單字畢業了！' : (correct===quizEntries.length?'全部答對！':'測驗完成！'),
+      message: graduated>0 ? `這次有 ${graduated} 個字連續答對 2 次，系統已經幫你畫掉了。` : undefined,
+      detail: `這次答對 ${correct} / ${quizEntries.length} 題`
+    });
+  }},['送出測驗']));
+  return card;
+}
+
 /* ---------- 複製到剪貼簿（給「造句練習」用來自己貼去問 AI，本系統不直接呼叫任何 AI API） ---------- */
 function copyToClipboard(text, done){
   function fallback(){
@@ -498,9 +845,13 @@ function buildSentenceWidget(w, store, key, opts){
   const pat = posPattern(w.pos);
   const card = el('div',{class:'card'});
   const meta = w.pos ? (' ('+w.pos+') '+w.m) : (' － '+w.m);
+  const rightBtns = el('div',{class:'row gap', style:'gap:6px;'},[buildSpeakBtn(w.w, {small:true})]);
+  if(opts.weakSource){
+    rightBtns.appendChild(buildWeakToggleBtn(opts.weakSource, key, {w:w.w, pos:w.pos, m:w.m}));
+  }
   card.appendChild(el('div',{class:'row space-between'},[
     el('div',{},[el('span',{class:'en big'},[w.w]), el('span',{class:'muted'},[meta])]),
-    buildSpeakBtn(w.w, {small:true}),
+    rightBtns,
   ]));
   card.appendChild(el('div',{class:'hint'},[pat.tip]));
   if(opts.showPatternList){
@@ -674,6 +1025,8 @@ function renderVocab(root){
   header.appendChild(jumpRow);
   root.appendChild(header);
 
+  root.appendChild(weakReviewOpen ? buildWeakReviewQuiz() : buildWeakWordsReviewCard());
+
   const words = day.words;
   if(words.length===0){
     root.appendChild(el('div',{class:'card'},[el('p',{},['本階段沒有安排新單字，太棒了！可以到「經典故事」或「世界故事集」自由複習閱讀。'])]));
@@ -686,9 +1039,9 @@ function renderVocab(root){
       el('h3',{},['📖 今日短文．'+day.dailyStory.title_zh]),
       buildSpeakBtn(plainTextFor(day.dailyStory.text)),
     ]));
-    storyCard.appendChild(el('p',{class:'muted'},['先讀完這篇短文，看看今天的 13 個新單字（螢光標記處）怎麼被用在句子裡，再往下做單字卡和測驗；按上面的 🔊 可以請瀏覽器唸出整篇故事。']));
+    storyCard.appendChild(el('p',{class:'muted'},['先讀完這篇短文，看看今天的 13 個新單字怎麼被用在句子裡（可以參考下方單字表），再往下做單字卡和測驗；按上面的 🔊 可以請瀏覽器唸出整篇故事。文章裡每個字都可以單獨點一下發音；選取一段文字可以畫底線標記重點（可以連續選好幾個字），再選一次可以取消；快速點兩下某個字可以直接標記「不熟」加進複習清單，不限定要不要是重點單字，再點兩下取消標記。']));
     const p = el('p',{class:'story-p'});
-    p.innerHTML = renderStoryHtml(day.dailyStory.text);
+    p.innerHTML = buildParaHtml(day.dailyStory.text, 'daily:'+day.dailyStory.day);
     storyCard.appendChild(p);
     if(day.dailyStory.text_zh){
       storyCard.appendChild(buildTranslationToggle(day.dailyStory.text_zh));
@@ -707,8 +1060,8 @@ function renderVocab(root){
   card.appendChild(flash);
   card.appendChild(el('div',{class:'row gap center'},[
     el('button',{class:'btn small', onclick:(e)=>{e.stopPropagation(); flashIndex=(flashIndex-1+words.length)%words.length; flashFlipped=false; render();}},['◀ 上一個']),
-    el('button',{class:'btn danger small', onclick:(e)=>{e.stopPropagation(); STATE.wordStatus[w.id]=0; flashIndex=(flashIndex+1)%words.length; flashFlipped=false; render();}},['😵 還不熟']),
-    el('button',{class:'btn ok small', onclick:(e)=>{e.stopPropagation(); STATE.wordStatus[w.id]=2; flashIndex=(flashIndex+1)%words.length; flashFlipped=false; render();}},['✅ 已經會了']),
+    el('button',{class:'btn danger small', onclick:(e)=>{e.stopPropagation(); STATE.wordStatus[w.id]=0; flagWeak('vocab', w.id, {w:w.w,pos:w.pos,m:w.m}); flashIndex=(flashIndex+1)%words.length; flashFlipped=false; render();}},['😵 還不熟']),
+    el('button',{class:'btn ok small', onclick:(e)=>{e.stopPropagation(); STATE.wordStatus[w.id]=2; unflagWeak('vocab', w.id); flashIndex=(flashIndex+1)%words.length; flashFlipped=false; render();}},['✅ 已經會了']),
     el('button',{class:'btn small', onclick:(e)=>{e.stopPropagation(); flashIndex=(flashIndex+1)%words.length; flashFlipped=false; render();}},['下一個 ▶']),
   ]));
   root.appendChild(card);
@@ -717,7 +1070,7 @@ function renderVocab(root){
   const list = el('div',{class:'card'});
   list.appendChild(el('h3',{},['今日單字清單']));
   const table = el('table',{class:'vocab-table'});
-  table.appendChild(el('tr',{},[el('th',{},['英文']), el('th',{},['詞性']), el('th',{},['中文意思']), el('th',{},['熟悉度']), el('th',{},['朗讀'])]));
+  table.appendChild(el('tr',{},[el('th',{},['英文']), el('th',{},['詞性']), el('th',{},['中文意思']), el('th',{},['熟悉度']), el('th',{},['朗讀']), el('th',{},['不熟'])]));
   words.forEach(wd=>{
     const s = STATE.wordStatus[wd.id]||0;
     const statusLabel = s===2?'✅ 已熟悉':(s===1?'🟡 學習中':'⚪ 新字');
@@ -726,7 +1079,8 @@ function renderVocab(root){
       el('td',{},[wd.pos]),
       el('td',{},[wd.m]),
       el('td',{},[statusLabel]),
-      el('td',{},[buildSpeakBtn(wd.w, {small:true})])
+      el('td',{},[buildSpeakBtn(wd.w, {small:true})]),
+      el('td',{},[buildWeakToggleBtn('vocab', wd.id, {w:wd.w, pos:wd.pos, m:wd.m})])
     ]));
   });
   list.appendChild(table);
@@ -738,7 +1092,7 @@ function renderVocab(root){
   sentenceWrap.appendChild(el('p',{class:'muted'},['每個單字先看句型提示，再自己寫一句完整的英文句子；寫完可以複製提問文字，貼去問 AI。']));
   root.appendChild(sentenceWrap);
   words.forEach(w=>{
-    root.appendChild(buildSentenceWidget(w, STATE.sentences, w.id, {showPatternList:true}));
+    root.appendChild(buildSentenceWidget(w, STATE.sentences, w.id, {showPatternList:true, weakSource:'vocab'}));
   });
 
   // Quiz
@@ -747,7 +1101,16 @@ function renderVocab(root){
   // Mark day done
   const doneCard = el('div',{class:'card center'});
   const isDone = !!STATE.dayDone[STATE.currentDay];
-  doneCard.appendChild(el('button',{class:'btn primary big', onclick:()=>{ STATE.dayDone[STATE.currentDay]=true; markTodayActive(); if(STATE.currentDay<TOTAL_DAYS-1){STATE.currentDay++;} render(); }},[isDone? '✅ 今天已完成（點我前往下一天）':'完成今天，前往下一天 →']));
+  doneCard.appendChild(el('button',{class:'btn primary big', onclick:()=>{
+    const wasDone = isDone;
+    STATE.dayDone[STATE.currentDay]=true;
+    markTodayActive();
+    if(!wasDone){
+      showCelebration({title:'今天完成了！', detail:day.label});
+    }
+    if(STATE.currentDay<TOTAL_DAYS-1){STATE.currentDay++;}
+    render();
+  }},[isDone? '✅ 今天已完成（點我前往下一天）':'完成今天，前往下一天 →']));
   root.appendChild(doneCard);
 }
 
@@ -789,6 +1152,11 @@ function buildQuizCard(day){
     const prev = STATE.quizBest[key];
     if(!prev || correct>prev.score){ STATE.quizBest[key] = {score:correct, total:quizWords.length}; }
     quizWords.forEach(w=>{ if(answers[w.id]===w.id){ STATE.wordStatus[w.id] = Math.max(STATE.wordStatus[w.id]||0, 2);} });
+    showCelebration({
+      title: correct===quizWords.length ? '滿分！太厲害了！' : '測驗完成！',
+      message: correct===quizWords.length ? '全部答對，這些單字你已經很熟悉了！' : undefined,
+      detail: `這次答對 ${correct} / ${quizWords.length} 題`
+    });
   }},['送出測驗']));
   return card;
 }
@@ -802,6 +1170,7 @@ function renderReading(root){
       el('h2',{},['📖 經典故事（延伸閱讀）']),
       el('p',{class:'muted'},['這裡是額外的延伸閱讀：根據公版經典故事（伊索寓言、格林童話、安徒生童話等）改寫的 13 篇適合國中程度的短篇故事，會在每週複習日循環搭配複習。想練習「每天新單字」的短文，請到「每日故事」分頁。'])
     ]));
+    root.appendChild(weakReviewOpen ? buildWeakReviewQuiz() : buildWeakWordsReviewCard());
     const grid = el('div',{class:'grid'});
     STORIES.forEach(s=>{
       const prog = STATE.storyProgress[s.id]||{};
@@ -816,15 +1185,31 @@ function renderReading(root){
     return;
   }
   const s = STORIES.find(x=>x.id===openStoryId);
-  root.appendChild(el('button',{class:'btn small', onclick:()=>{openStoryId=null; render();}},['← 回故事列表']));
+  root.appendChild(el('div',{class:'row space-between', style:'margin-bottom:10px;flex-wrap:wrap;gap:8px;'},[
+    el('button',{class:'btn small', onclick:()=>{openStoryId=null; render();}},['← 回故事列表']),
+    (()=>{
+      const prog = STATE.storyProgress[s.id]||{};
+      const isDone = !!prog.read;
+      return el('button',{class: isDone?'btn ok':'btn primary', onclick:()=>{
+        const p = STATE.storyProgress[s.id]||{};
+        p.read = !p.read;
+        STATE.storyProgress[s.id] = p;
+        render();
+      }},[isDone? '✅ 已標記讀完（點我取消）':'標記已讀完這篇']);
+    })(),
+  ]));
 
   const card = el('div',{class:'card'});
   card.appendChild(el('div',{class:'row space-between'},[
     el('h2',{},[s.title_en]),
     buildSpeakBtn(s.text.join(' ')),
   ]));
-  card.appendChild(el('p',{class:'muted'},[s.title_zh+'　'+s.level+'　約 '+s.words+' 字　｜　按上面的 🔊 可以請瀏覽器唸出整篇故事']));
-  s.text.forEach(p=> card.appendChild(el('p',{class:'story-p'},[p])));
+  card.appendChild(el('p',{class:'muted'},[s.title_zh+'　'+s.level+'　約 '+s.words+' 字　｜　按上面的 🔊 可以唸出整篇故事，文章裡的字也可以單獨點一下發音；選取一段文字可以畫底線標記，再選一次取消；快速點兩下某個字可以直接標記「不熟」，再點兩下取消。']));
+  s.text.forEach((p, idx)=>{
+    const pEl = el('p',{class:'story-p'});
+    pEl.innerHTML = buildParaHtml(p, 'reading:'+s.id+':'+idx);
+    card.appendChild(pEl);
+  });
   if(s.text_zh){
     card.appendChild(buildTranslationToggle(s.text_zh));
   }
@@ -833,7 +1218,11 @@ function renderReading(root){
   const vocabCard = el('div',{class:'card'});
   vocabCard.appendChild(el('h3',{},['📌 重點單字']));
   const vGrid = el('div',{class:'vocab-tags'});
-  s.newWords.forEach(v=> vGrid.appendChild(el('span',{class:'tag'},[v.en+' － '+v.zh+' ', buildSpeakBtn(v.en, {small:true})])));
+  s.newWords.forEach((v, idx)=> vGrid.appendChild(el('span',{class:'tag'},[
+    v.en+' － '+v.zh+' ',
+    buildSpeakBtn(v.en, {small:true}),
+    buildWeakToggleBtn('reading', s.id+'_'+idx, {w:v.en, pos:'', m:v.zh})
+  ])));
   vocabCard.appendChild(vGrid);
   root.appendChild(vocabCard);
 
@@ -843,7 +1232,7 @@ function renderReading(root){
   root.appendChild(sentenceWrap);
   s.newWords.forEach((v, idx)=>{
     const key = s.id+'_'+idx;
-    root.appendChild(buildSentenceWidget({w:v.en, pos:'', m:v.zh}, STATE.readingSentences, key));
+    root.appendChild(buildSentenceWidget({w:v.en, pos:'', m:v.zh}, STATE.readingSentences, key, {weakSource:'reading'}));
   });
 
   const quizCard = el('div',{class:'card'});
@@ -874,6 +1263,11 @@ function renderReading(root){
     const prog = STATE.storyProgress[s.id]||{};
     prog.read = true; prog.quizScore = correct; prog.total = s.questions.length;
     STATE.storyProgress[s.id] = prog;
+    showCelebration({
+      title: correct===s.questions.length ? '滿分！太厲害了！' : '測驗完成！',
+      message: correct===s.questions.length ? '全部答對，這篇故事你讀得很透徹！' : undefined,
+      detail: `這次答對 ${correct} / ${s.questions.length} 題`
+    });
   }},['送出測驗']));
   root.appendChild(quizCard);
 
@@ -885,7 +1279,6 @@ function renderReading(root){
   ta.value = prog0.writing||'';
   ta.addEventListener('input', ()=>{ const p=STATE.storyProgress[s.id]||{}; p.writing=ta.value; STATE.storyProgress[s.id]=p; scheduleCloudSave(); });
   writeCard.appendChild(ta);
-  writeCard.appendChild(el('button',{class:'btn', onclick:()=>{ const p=STATE.storyProgress[s.id]||{}; p.read=true; STATE.storyProgress[s.id]=p; render(); }},['標記已讀完這篇 ✅']));
   root.appendChild(writeCard);
 }
 
@@ -901,6 +1294,7 @@ function renderStorybook(root){
       el('p',{class:'muted'},['這裡是另一套延伸閱讀：取材自你另一本《國中生必讀世界經典英文故事集》全書 42 篇故事的主題與重點單字，改寫成適合國中程度的原創短篇故事＋中文翻譯，並整理出對應的單字表（單字、詞性、中文意思）。這裡的故事內文和翻譯都是重新原創撰寫，並非原書的文字或翻譯；如果想看原書的完整內容、課本練習題與官方翻譯，還是要翻閱你自己的書。']),
       el('p',{class:'muted'},['這是「新」的學習選項，和原本的「每日故事」「經典故事」是各自獨立、並存的內容，不會互相取代或影響彼此的進度。'])
     ]));
+    root.appendChild(weakReviewOpen ? buildWeakReviewQuiz() : buildWeakWordsReviewCard());
     const grid = el('div',{class:'grid'});
     STORYBOOK.forEach(s=>{
       const prog = STATE.storybookProgress[s.id]||{};
@@ -927,12 +1321,13 @@ function renderStorybook(root){
   if(s.text && s.text.length){
     const storyCard = el('div',{class:'card highlight'});
     storyCard.appendChild(el('div',{class:'row space-between'},[
-      el('h3',{},['📖 故事（螢光標記處為本課重點單字）']),
+      el('h3',{},['📖 故事']),
       buildSpeakBtn(plainTextFor(s.text.join(' '))),
     ]));
-    s.text.forEach(p=>{
+    storyCard.appendChild(el('p',{class:'muted small'},['文章裡每個字都可以單獨點一下發音；選取一段文字可以畫底線標記重點，再選一次取消；快速點兩下某個字可以直接標記「不熟」，再點兩下取消。']));
+    s.text.forEach((p, idx)=>{
       const pEl = el('p',{class:'story-p'});
-      pEl.innerHTML = renderStoryHtml(p);
+      pEl.innerHTML = buildParaHtml(p, 'storybook:'+s.id+':'+idx);
       storyCard.appendChild(pEl);
     });
     if(s.text_zh){
@@ -961,9 +1356,13 @@ function renderStorybook(root){
   const listCard = el('div',{class:'card'});
   listCard.appendChild(el('h3',{},['📌 重點單字']));
   const table = el('table',{class:'vocab-table'});
-  table.appendChild(el('tr',{},[el('th',{},['英文']), el('th',{},['詞性']), el('th',{},['中文意思']), el('th',{},['朗讀'])]));
-  s.words.forEach(w=>{
-    table.appendChild(el('tr',{},[el('td',{class:'en'},[w.w]), el('td',{},[w.pos]), el('td',{},[w.m]), el('td',{},[buildSpeakBtn(w.w, {small:true})])]));
+  table.appendChild(el('tr',{},[el('th',{},['英文']), el('th',{},['詞性']), el('th',{},['中文意思']), el('th',{},['朗讀']), el('th',{},['不熟'])]));
+  s.words.forEach((w, idx)=>{
+    table.appendChild(el('tr',{},[
+      el('td',{class:'en'},[w.w]), el('td',{},[w.pos]), el('td',{},[w.m]),
+      el('td',{},[buildSpeakBtn(w.w, {small:true})]),
+      el('td',{},[buildWeakToggleBtn('storybook', s.id+'_'+idx, {w:w.w, pos:w.pos, m:w.m})])
+    ]));
   });
   listCard.appendChild(table);
   root.appendChild(listCard);
@@ -975,7 +1374,11 @@ function renderStorybook(root){
     refCard.appendChild(el('h3',{},['🔖 參考單字']));
     refCard.appendChild(el('p',{class:'muted'},['書中額外補充的詞彙，非本課要求熟記的重點單字。']));
     const rGrid = el('div',{class:'vocab-tags'});
-    s.reference_words.forEach(w=> rGrid.appendChild(el('span',{class:'tag'},[w.w+' － '+w.m+' ', buildSpeakBtn(w.w, {small:true})])));
+    s.reference_words.forEach((w, idx)=> rGrid.appendChild(el('span',{class:'tag'},[
+      w.w+' － '+w.m+' ',
+      buildSpeakBtn(w.w, {small:true}),
+      buildWeakToggleBtn('storybookRef', s.id+'_ref_'+idx, {w:w.w, pos:w.pos, m:w.m})
+    ])));
     refCard.appendChild(rGrid);
     root.appendChild(refCard);
 
@@ -985,7 +1388,7 @@ function renderStorybook(root){
     root.appendChild(refSentenceWrap);
     s.reference_words.forEach((w, idx)=>{
       const key = s.id+'_ref_'+idx;
-      root.appendChild(buildSentenceWidget(w, STATE.storybookRefSentences, key));
+      root.appendChild(buildSentenceWidget(w, STATE.storybookRefSentences, key, {weakSource:'storybookRef'}));
     });
   }
 
@@ -993,8 +1396,12 @@ function renderStorybook(root){
   const isDone = !!(STATE.storybookProgress[s.id]||{}).read;
   doneCard.appendChild(el('button',{class: isDone?'btn ok':'btn primary', onclick:()=>{
     const p = STATE.storybookProgress[s.id]||{};
+    const wasDone = !!p.read;
     p.read = !p.read;
     STATE.storybookProgress[s.id] = p;
+    if(!wasDone && p.read){
+      showCelebration({title:'複習完成！', detail:'Story '+s.id+'　'+s.title_zh});
+    }
     render();
   }},[isDone? '✅ 已標記複習完成（點我取消）':'標記這篇單字已複習完成']));
   root.appendChild(doneCard);
@@ -1008,7 +1415,7 @@ function buildStorybookSentenceCard(s){
   wrap.appendChild(el('p',{class:'muted'},['挑幾個這篇故事的重點單字，練習自己寫一句完整的英文句子；寫完可以複製提問文字，貼去問 AI。']));
   s.words.forEach((w, idx)=>{
     const key = s.id+'_'+idx;
-    wrap.appendChild(buildSentenceWidget(w, STATE.storybookSentences, key));
+    wrap.appendChild(buildSentenceWidget(w, STATE.storybookSentences, key, {weakSource:'storybook'}));
   });
   return wrap;
 }
@@ -1018,12 +1425,12 @@ function renderGuide(root){
   root.appendChild(el('div',{class:'card'},[
     el('h2',{},['📘 使用說明']),
     el('h3',{},['系統架構：用故事記單字']),
-    el('p',{},['這套系統把「國中單字王 2000 單字題庫表」整理成 26 週（約 6 個月）的學習計畫，並用「故事情境」取代死背單字卡：每週一到週六，每天都有一篇專門為當天 13 個新單字寫的短文——這些單字在文中會用螢光標記出來，讓你先看懂單字在句子裡怎麼被使用，再進入單字卡與測驗鞏固記憶。週日則是複習日，複習本週單字並閱讀一篇經典故事（伊索寓言、格林童話、安徒生童話改寫），做延伸練習。']),
+    el('p',{},['這套系統把「國中單字王 2000 單字題庫表」整理成 26 週（約 6 個月）的學習計畫，並用「故事情境」取代死背單字卡：每週一到週六，每天都有一篇專門為當天 13 個新單字寫的短文，讓你先看懂單字在句子裡怎麼被使用，再進入單字卡與測驗鞏固記憶。週日則是複習日，複習本週單字並閱讀一篇經典故事（伊索寓言、格林童話、安徒生童話改寫），做延伸練習。']),
     el('h3',{},['三大學習分頁']),
     el('ul',{class:'pattern-list'},[
       el('li',{},['「世界故事集」：取材自另一本《國中生必讀世界經典英文故事集》全書 42 篇故事的主題與重點單字，改寫成原創短篇故事＋中文翻譯，再附上單字表、單字卡、造句練習（重點單字＋參考單字）；原書完整內文、練習題與官方翻譯仍請參閱你自己的書。']),
       el('li',{},['「經典故事」：13 篇改寫自伊索寓言、格林童話、安徒生童話的延伸閱讀故事，附中文翻譯、重點單字造句練習、閱讀理解測驗與延伸造句。']),
-      el('li',{},['「每日故事」：先讀一篇用今天 13 個新字寫成的短文（新字會用螢光標記），再用單字卡（正面英文、反面中文）＋造句練習＋小測驗鞏固記憶；文章下方有「🀄 顯示中文翻譯」可以核對意思，也可以直接跳到指定天數。']),
+      el('li',{},['「每日故事」：先讀一篇用今天 13 個新字寫成的短文，再用單字卡（正面英文、反面中文）＋造句練習＋小測驗鞏固記憶；文章下方有「🀄 顯示中文翻譯」可以核對意思，也可以直接跳到指定天數。']),
     ]),
     el('h3',{},['為什麼用故事學單字？']),
     el('p',{},['把單字放進句子和情境裡學，比死背單字表更容易記住意思、詞性和真實用法。因為原始單字表本身就是依主題分組（例如同一天常常是「人物」「食物」「動物」等同類單字），所以故事情境會特別自然、好懂。建議先讀故事抓大意，看不懂的字才回頭查中文意思，讀完再做單字卡和測驗加深印象。每篇文章都附有中文翻譯，但預設是隱藏的（按「顯示中文翻譯」才會出現），這是刻意設計成這樣——先靠自己理解英文，翻譯只是用來核對或救急，才能真正練到閱讀能力。']),
@@ -1032,6 +1439,15 @@ function renderGuide(root){
     el('h3',{},['🔊 朗讀功能']),
     el('p',{},['每個單字（單字卡、單字清單、造句練習欄位上方）旁邊都有一個小小的 🔊 按鈕，按下去瀏覽器就會唸出這個英文單字；每篇故事開頭也有一個 🔊 按鈕，可以唸出整篇英文故事。朗讀中按鈕會變成 ⏹，再按一次或按最上面標題列的「⏹ 停止朗讀」都可以立刻停止。']),
     el('p',{},['最上面標題列有「語速」和「語音」兩個選單：語速可以選慢／稍慢／正常／稍快；語音選單會列出這個瀏覽器裡可以用的英文發音（通常有好幾種，例如不同口音或男女聲），如果覺得預設的聲音很怪，可以換一個試試看，選好的設定會記住，之後都會照這個設定唸。這個功能是用瀏覽器內建的語音朗讀功能做的，不需要連網、不會呼叫任何 AI 服務，完全免費，但發音好不好聽會依你用的瀏覽器和作業系統而不同（一般來說 Chrome 或 Edge 的語音選擇比較多、比較自然）。如果按了沒有聲音，先確認裝置音量和瀏覽器沒有被靜音；部分瀏覽器第一次使用語音功能時，可能需要先跟網頁有過一次點擊互動才能發聲。']),
+    el('h3',{},['⭐ 不熟單字複習']),
+    el('p',{},['「世界故事集」「經典故事」「每日故事」裡每個單字旁邊都有一個 ☆ 按鈕（單字卡、單字清單、標籤、造句練習欄位上都有），看到不熟的單字就按一下，會變成 ⭐ 並加進複習清單，再按一次可以取消標記；同一個單字不管在哪個分頁被標記，都會算同一筆，不會重複。']),
+    el('p',{},['不只限於單字表裡的重點單字或參考單字——文章內文裡任何一個字，只要快速點兩下（雙擊）就能直接標記「不熟」，再點兩下取消，不需要這個字剛好在單字表裡才能標記。']),
+    el('p',{},['三個分頁最上面都會出現「⭐ 不熟單字複習」卡片，列出目前所有標記過的單字（只顯示英文和詞性、以及複習進度，不會先顯示中文意思，避免看到答案），按「開始複習測驗 →」就會出一份複習測驗（最多 10 題），送出測驗後才會告訴你每題對不對。如果這個字剛好在單字表裡，會出「選中文意思」的選擇題自動判斷對錯；如果是直接從文章裡標記、不在單字表裡的字（例如人名、少見的字），會改成先聽發音，再自己勾選「記住了」或「還不熟」。不管哪一種，答對一次進度會 +1，連續答對 2 次系統就會自動把這個字從清單畢業移除，答錯則進度歸零、下次要重新累積。']),
+    el('p',{},['提醒：這份不熟單字清單和其他學習進度一樣，只存在這個瀏覽器裡；如果想在不同裝置或瀏覽器之間同步，需要先設定好 Google 試算表雲端同步（同步狀態會顯示在各分頁最上方），沒有設定的話清除瀏覽器資料或換裝置就會遺失記錄。']),
+    el('h3',{},['🖱️ 文章點字發音＋畫底線＋標記不熟']),
+    el('p',{},['「世界故事集」「經典故事」「每日故事」裡的文章內文，每一個英文字都可以直接點一下，瀏覽器就會唸出這個字（用的是同一套朗讀設定，語速、語音都相同）。']),
+    el('p',{},['如果想在文章上標記重點，用滑鼠拖曳（手機／平板用手指滑動）選取一段文字，放開之後這段文字就會自動加上底線，像用螢光筆畫重點一樣；可以連續選好幾個字（例如 "ice cream"、"police officer" 這種算一個詞的片語就可以整個一起選起來連在一起）；再選取同一段文字一次，就會取消底線。']),
+    el('p',{},['如果覺得某個字不熟，快速點兩下（雙擊）這個字，就會直接標記「不熟」（背景會變成淡紅色的波浪底線），加進「⭐ 不熟單字複習」清單，再點兩下同一個字可以取消標記。底線標記和不熟標記都會依文章分別記住，和其他進度一樣只存在這個瀏覽器裡，要跨裝置同步一樣需要設定好雲端同步。']),
   ]));
 
   root.appendChild(el('div',{class:'card'},[
@@ -1043,6 +1459,7 @@ function renderGuide(root){
 /* ---------- Init ---------- */
 function startApp(){
   initTtsControls();
+  initStoryTextInteractions();
   window.addEventListener('hashchange', render);
   if(!location.hash) location.hash = '#storybook';
   window.addEventListener('beforeunload', ()=>{
