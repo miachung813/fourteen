@@ -59,6 +59,8 @@ body{
   from{ transform:scale(.85); opacity:0; }
   to{ transform:scale(1); opacity:1; }
 }
+#cloudSyncModal .celebrate-card{max-width:420px;}
+#cloudSyncModal .btn{width:auto; flex:1; margin-top:0;}
 header.topbar{
   background:linear-gradient(135deg,#c96f4a,#a8562f);
   color:#fff;
@@ -917,23 +919,55 @@ function setCloudSyncState(status, text){
 // 就會變成「尚未設定雲端同步」，因為 localStorage 沒有跟著搬過去。
 // 使用說明頁面照之前的要求不放完整設定教學，但還是需要有地方能重新貼網址，所以點一下最上面的同步狀態文字，
 // 就會跳出一個小視窗讓你貼上（或更新）Google Apps Script 網頁應用程式網址，貼上後會立刻嘗試連線同步。
+// 用自己畫的小視窗（不是 window.prompt()）讓使用者貼上／更新雲端同步網址：
+// 有些瀏覽器（尤其學校管理的 Chromebook 之類的環境）會直接封鎖 window.prompt() 這種原生對話框，
+// 點了完全沒反應也不會有任何錯誤訊息，換成自己畫的畫面就不會有這個問題。
+function showCloudSyncModal(){
+  const existing = document.getElementById('cloudSyncModal');
+  if(existing) existing.remove();
+  const overlay = el('div',{id:'cloudSyncModal', class:'celebrate-overlay'});
+  const card = el('div',{class:'celebrate-card', style:'text-align:left;'});
+  card.appendChild(el('h2',{style:'text-align:center;margin-top:0;'},['☁️ 雲端同步設定']));
+  card.appendChild(el('p',{class:'muted'},['貼上你的 Google Apps Script 網頁應用程式網址（.../exec），就可以在不同瀏覽器／裝置之間同步進度；欄位清空後按「儲存」可以取消同步。']));
+  const input = el('input',{type:'text', class:'input-text', style:'width:100%;box-sizing:border-box;margin-bottom:8px;', placeholder:'https://script.google.com/macros/s/xxx/exec'});
+  input.value = getSheetUrl();
+  card.appendChild(input);
+  const statusLine = el('p',{class:'muted small', style:'min-height:18px;'},['']);
+  card.appendChild(statusLine);
+  const btnRow = el('div',{class:'row gap'});
+  const saveBtn = el('button',{class:'btn primary'},['儲存']);
+  saveBtn.addEventListener('click', ()=>{
+    const trimmed = (input.value||'').trim();
+    setSheetUrl(trimmed);
+    if(trimmed){
+      statusLine.textContent = '正在連線同步…';
+      saveBtn.disabled = true;
+      loadFromCloud(trimmed).finally(()=>{
+        skipNextAutoSave = true;
+        render();
+        overlay.remove();
+      });
+    } else {
+      setCloudSyncState('idle', '☁️ 尚未設定雲端同步');
+      overlay.remove();
+    }
+  });
+  const cancelBtn = el('button',{class:'btn'},['取消']);
+  cancelBtn.addEventListener('click', ()=> overlay.remove());
+  btnRow.appendChild(saveBtn);
+  btnRow.appendChild(cancelBtn);
+  card.appendChild(btnRow);
+  overlay.appendChild(card);
+  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  input.focus();
+}
 function initCloudSyncIndicatorClick(){
   const ind = document.getElementById('cloudSyncIndicator');
   if(!ind) return;
   ind.style.cursor = 'pointer';
   ind.title = '點一下可以設定或更新雲端同步網址';
-  ind.addEventListener('click', ()=>{
-    const current = getSheetUrl();
-    const input = window.prompt('請貼上 Google Apps Script 網頁應用程式網址（.../exec）\n留空後按確定可以取消雲端同步：', current);
-    if(input===null) return; // 使用者按取消，什麼都不做
-    const trimmed = input.trim();
-    setSheetUrl(trimmed);
-    if(trimmed){
-      loadFromCloud(trimmed).finally(()=>{ skipNextAutoSave = true; render(); });
-    } else {
-      setCloudSyncState('idle', '☁️ 尚未設定雲端同步');
-    }
-  });
+  ind.addEventListener('click', showCloudSyncModal);
 }
 
 let cloudSaveTimer = null;
