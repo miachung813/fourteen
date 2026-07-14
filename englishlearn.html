@@ -25,6 +25,20 @@ body{
   color:var(--ink);
   line-height:1.6;
 }
+.lock-screen{
+  position:fixed; inset:0;
+  background:linear-gradient(135deg,#c96f4a,#a8562f);
+  display:flex; align-items:center; justify-content:center;
+  z-index:200; padding:20px;
+}
+.lock-card{
+  background:var(--card); border-radius:var(--radius);
+  padding:28px 24px; max-width:320px; width:100%;
+  text-align:center; box-shadow:0 8px 30px rgba(0,0,0,.25);
+}
+.lock-card h2{margin:0 0 6px;}
+.lock-card .input-text{width:100%; margin:14px 0 10px; text-align:center; font-size:16px;}
+.lock-card .btn{width:100%;}
 header.topbar{
   background:linear-gradient(135deg,#c96f4a,#a8562f);
   color:#fff;
@@ -33,6 +47,20 @@ header.topbar{
   box-shadow:0 2px 10px rgba(0,0,0,.12);
 }
 header.topbar h1{margin:0 0 10px; font-size:20px;}
+.sync-indicator{font-size:12px; margin:-4px 0 10px; opacity:.9;}
+.sync-indicator.sync-success{color:#dff2e1;}
+.sync-indicator.sync-error{color:#ffd9d0;}
+.sync-indicator.sync-pending,.sync-indicator.sync-saving{color:#fff2df;}
+.tts-settings{
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+  font-size:12.5px; color:#fff; opacity:.95; margin:0 0 10px;
+}
+.tts-settings label{display:inline-flex; align-items:center; gap:4px;}
+.tts-settings select{
+  font-size:12.5px; padding:2px 6px; border-radius:6px; border:1px solid rgba(255,255,255,.5);
+  background:#fff; color:var(--ink);
+}
+.tts-settings .btn{padding:3px 10px; font-size:12px;}
 nav.tabs{display:flex; flex-wrap:wrap; gap:6px;}
 .tab-btn{
   background:rgba(255,255,255,.15);
@@ -95,9 +123,20 @@ main{max-width:960px; margin:0 auto; padding:16px 14px 60px;}
 .btn.primary:hover{background:var(--brand-dark);}
 .btn.ok{background:#e5f2e6; border-color:#bcdcc0; color:var(--good);}
 .btn.danger{background:#fbe7e3; border-color:#f2c3ba; color:var(--bad);}
+.speak-btn{
+  background:#fff2df; border:1px solid #f0dcb3; color:var(--brand-dark);
+  width:28px; height:28px; border-radius:50%; cursor:pointer;
+  font-size:14px; line-height:1; display:inline-flex; align-items:center; justify-content:center;
+  padding:0; vertical-align:middle;
+}
+.speak-btn:hover{filter:brightness(.96);}
+.speak-btn.small{width:22px; height:22px; font-size:12px;}
+.speak-btn.playing{background:var(--brand); border-color:var(--brand); color:#fff;}
 .input-num{width:80px; padding:6px 8px; border-radius:8px; border:1px solid var(--line);}
 .input-text{padding:8px 10px; border-radius:8px; border:1px solid var(--line); font-size:14px; flex:1; min-width:140px;}
 select.input-text{flex:0 0 auto;}
+.code-block{background:#2d2a26; color:#f4efe6; padding:12px 14px; border-radius:10px; font-size:12.5px; line-height:1.5; overflow-x:auto; white-space:pre; font-family:Menlo,Consolas,monospace;}
+.row.wrap{flex-wrap:wrap;}
 
 .flashcard{
   width:100%; max-width:420px; height:180px; margin:10px auto; cursor:pointer;
@@ -135,27 +174,53 @@ span.en.big{font-size:18px; font-weight:700; color:var(--brand-dark);}
 .story-p{font-size:15px; margin:0 0 12px; text-align:justify;}
 mark.hlword{background:#ffe3c2; color:var(--brand-dark); font-weight:700; padding:0 3px; border-radius:4px;}
 .vocab-tags{display:flex; flex-wrap:wrap; gap:8px;}
-.tag{background:#f4efe6; border-radius:999px; padding:5px 12px; font-size:13px;}
+.tag{background:#f4efe6; border-radius:999px; padding:5px 6px 5px 12px; font-size:13px; display:inline-flex; align-items:center; gap:4px;}
 
 footer{max-width:960px; margin:0 auto; padding:0 14px 40px; color:var(--muted); font-size:12px; text-align:center;}
 
 </style>
 </head>
 <body>
+<div id="lockScreen" class="lock-screen">
+  <div class="lock-card">
+    <h2>🔒 請輸入密碼</h2>
+    <p class="muted">請輸入密碼以繼續使用這個學習系統。</p>
+    <input id="lockPasswordInput" type="password" class="input-text" placeholder="密碼" autocomplete="off">
+    <button id="lockSubmitBtn" class="btn primary">進入</button>
+    <p id="lockError" class="bad small" style="display:none;">密碼錯誤，請再試一次。</p>
+  </div>
+</div>
+<div id="appRoot" style="display:none;">
 <header class="topbar">
   <h1>📗 國中英文 2000 單字 × 故事閱讀學習系統</h1>
+  <div id="cloudSyncIndicator" class="sync-indicator">☁️ 尚未設定雲端同步</div>
+  <div id="ttsSettings" class="tts-settings">
+    <span>🔊 朗讀：</span>
+    <label>語速
+      <select id="ttsRateSelect">
+        <option value="0.7">慢</option>
+        <option value="0.85">稍慢</option>
+        <option value="1">正常</option>
+        <option value="1.25">稍快</option>
+      </select>
+    </label>
+    <label>語音
+      <select id="ttsVoiceSelect"><option value="">系統預設</option></select>
+    </label>
+    <button id="ttsStopBtn" class="btn small" type="button">⏹ 停止朗讀</button>
+  </div>
   <nav class="tabs" id="tabs">
-    <a class="tab-btn" data-tab="vocab" href="#vocab">每日故事</a>
-    <a class="tab-btn" data-tab="sentence" href="#sentence">造句練習</a>
+    <a class="tab-btn" data-tab="storybook" href="#storybook">世界故事集</a>
     <a class="tab-btn" data-tab="reading" href="#reading">經典故事</a>
-    <a class="tab-btn" data-tab="storybook" href="#storybook">故事書單字</a>
+    <a class="tab-btn" data-tab="vocab" href="#vocab">每日故事</a>
     <a class="tab-btn" data-tab="guide" href="#guide">使用說明</a>
   </nav>
 </header>
 <main>
   <div id="view"></div>
 </main>
-<footer>資料來源：國中單字王 2000 單字題庫表（主題）；每日短文為原創寫作，用於情境化學習 2000 單字；延伸閱讀故事改寫自伊索寓言、格林童話、安徒生童話等公版經典故事；「故事書單字」的主題與重點單字取材自《國中生必讀世界經典英文故事集》，故事內文與中文翻譯為原創改寫撰寫（非原書文字或翻譯），如需原書完整內容、練習題與官方翻譯請另行參閱原書。</footer>
+<footer>資料來源：國中單字王 2000 單字題庫表（主題）；每日短文為原創寫作，用於情境化學習 2000 單字；延伸閱讀故事改寫自伊索寓言、格林童話、安徒生童話等公版經典故事；「世界故事集」的主題與重點單字取材自《國中生必讀世界經典英文故事集》，故事內文與中文翻譯為原創改寫撰寫（非原書文字或翻譯），如需原書完整內容、練習題與官方翻譯請另行參閱原書。</footer>
+</div>
 
 <script>
 const VOCAB = [{"id": 1, "w": "adult", "pos": "名詞", "m": "成年人", "theme": "人物稱謂"}, {"id": 2, "w": "angel", "pos": "名詞", "m": "天使", "theme": "人物稱謂"}, {"id": 3, "w": "baby", "pos": "名詞", "m": "嬰兒", "theme": "人物稱謂"}, {"id": 4, "w": "boy", "pos": "名詞", "m": "男孩", "theme": "人物稱謂"}, {"id": 5, "w": "child", "pos": "名詞", "m": "小孩", "theme": "人物稱謂"}, {"id": 6, "w": "couple", "pos": "名詞", "m": "情侶；夫妻", "theme": "人物稱謂"}, {"id": 7, "w": "customer", "pos": "名詞", "m": "顧客", "theme": "人物稱謂"}, {"id": 8, "w": "fool", "pos": "名詞", "m": "傻瓜", "theme": "人物稱謂"}, {"id": 9, "w": "genius", "pos": "名詞", "m": "天才", "theme": "人物稱謂"}, {"id": 10, "w": "gentleman", "pos": "名詞", "m": "紳士", "theme": "人物稱謂"}, {"id": 11, "w": "giant", "pos": "名詞", "m": "巨人", "theme": "人物稱謂"}, {"id": 12, "w": "girl", "pos": "名詞", "m": "女孩", "theme": "人物稱謂"}, {"id": 13, "w": "guest", "pos": "名詞", "m": "客人", "theme": "人物稱謂"}, {"id": 14, "w": "hero", "pos": "名詞", "m": "英雄", "theme": "人物稱謂"}, {"id": 15, "w": "host", "pos": "名詞", "m": "主人", "theme": "人物稱謂"}, {"id": 16, "w": "kid", "pos": "名詞", "m": "小孩", "theme": "人物稱謂"}, {"id": 17, "w": "king", "pos": "名詞", "m": "國王", "theme": "人物稱謂"}, {"id": 18, "w": "lady", "pos": "名詞", "m": "女士", "theme": "人物稱謂"}, {"id": 19, "w": "man", "pos": "名詞", "m": "男人", "theme": "人物稱謂"}, {"id": 20, "w": "master", "pos": "名詞", "m": "主人；大師", "theme": "人物稱謂"}, {"id": 21, "w": "neighbor", "pos": "名詞", "m": "鄰居", "theme": "人物稱謂"}, {"id": 22, "w": "partner", "pos": "名詞", "m": "夥伴；伴侶", "theme": "人物稱謂"}, {"id": 23, "w": "people", "pos": "名詞", "m": "人們", "theme": "人物稱謂"}, {"id": 24, "w": "person", "pos": "名詞", "m": "人", "theme": "人物稱謂"}, {"id": 25, "w": "prince", "pos": "名詞", "m": "王子", "theme": "人物稱謂"}, {"id": 26, "w": "princess", "pos": "名詞", "m": "公主", "theme": "人物稱謂"}, {"id": 27, "w": "queen", "pos": "名詞", "m": "女王", "theme": "人物稱謂"}, {"id": 28, "w": "stranger", "pos": "名詞", "m": "陌生人", "theme": "人物稱謂"}, {"id": 29, "w": "teenager", "pos": "名詞", "m": "青少年", "theme": "人物稱謂"}, {"id": 30, "w": "visitor", "pos": "名詞", "m": "訪客", "theme": "人物稱謂"}, {"id": 31, "w": "woman", "pos": "名詞", "m": "女人", "theme": "人物稱謂"}, {"id": 32, "w": "youth", "pos": "名詞", "m": "青年", "theme": "人物稱謂"}, {"id": 33, "w": "beautiful", "pos": "形容詞", "m": "美麗的", "theme": "外貌與體型形容詞"}, {"id": 34, "w": "blind", "pos": "形容詞", "m": "失明的", "theme": "外貌與體型形容詞"}, {"id": 35, "w": "chubby", "pos": "形容詞", "m": "圓胖的", "theme": "外貌與體型形容詞"}, {"id": 36, "w": "cute", "pos": "形容詞", "m": "可愛的", "theme": "外貌與體型形容詞"}, {"id": 37, "w": "deaf", "pos": "形容詞", "m": "失聰的", "theme": "外貌與體型形容詞"}, {"id": 38, "w": "dumb", "pos": "形容詞", "m": "啞的", "theme": "外貌與體型形容詞"}, {"id": 39, "w": "fat", "pos": "形容詞", "m": "胖的", "theme": "外貌與體型形容詞"}, {"id": 40, "w": "handsome", "pos": "形容詞", "m": "英俊的", "theme": "外貌與體型形容詞"}, {"id": 41, "w": "heavy", "pos": "形容詞", "m": "重的", "theme": "外貌與體型形容詞"}, {"id": 42, "w": "nice-looking", "pos": "形容詞", "m": "好看的", "theme": "外貌與體型形容詞"}, {"id": 43, "w": "old", "pos": "形容詞", "m": "年老的", "theme": "外貌與體型形容詞"}, {"id": 44, "w": "over-weight", "pos": "形容詞", "m": "過重的", "theme": "外貌與體型形容詞"}, {"id": 45, "w": "short", "pos": "形容詞", "m": "矮的", "theme": "外貌與體型形容詞"}, {"id": 46, "w": "skinny", "pos": "形容詞", "m": "極瘦的", "theme": "外貌與體型形容詞"}, {"id": 47, "w": "slender", "pos": "形容詞", "m": "苗條的", "theme": "外貌與體型形容詞"}, {"id": 48, "w": "slim", "pos": "形容詞", "m": "纖細的", "theme": "外貌與體型形容詞"}, {"id": 49, "w": "tall", "pos": "形容詞", "m": "高的", "theme": "外貌與體型形容詞"}, {"id": 50, "w": "thin", "pos": "形容詞", "m": "瘦的", "theme": "外貌與體型形容詞"}, {"id": 51, "w": "under-weight", "pos": "形容詞", "m": "體重不足的", "theme": "外貌與體型形容詞"}, {"id": 52, "w": "ugly", "pos": "形容詞", "m": "醜陋的", "theme": "外貌與體型形容詞"}, {"id": 53, "w": "young", "pos": "形容詞", "m": "年輕的", "theme": "外貌與體型形容詞"}, {"id": 54, "w": "active", "pos": "形容詞", "m": "活躍的", "theme": "個性與情緒形容詞"}, {"id": 55, "w": "angry", "pos": "形容詞", "m": "生氣的", "theme": "個性與情緒形容詞"}, {"id": 56, "w": "bad", "pos": "形容詞", "m": "壞的", "theme": "個性與情緒形容詞"}, {"id": 57, "w": "boring", "pos": "形容詞", "m": "令人無聊的", "theme": "個性與情緒形容詞"}, {"id": 58, "w": "brave", "pos": "形容詞", "m": "勇敢的", "theme": "個性與情緒形容詞"}, {"id": 59, "w": "busy", "pos": "形容詞", "m": "忙碌的", "theme": "個性與情緒形容詞"}, {"id": 60, "w": "careful", "pos": "形容詞", "m": "小心的", "theme": "個性與情緒形容詞"}, {"id": 61, "w": "careless", "pos": "形容詞", "m": "粗心的", "theme": "個性與情緒形容詞"}, {"id": 62, "w": "childish", "pos": "形容詞", "m": "幼稚的", "theme": "個性與情緒形容詞"}, {"id": 63, "w": "childlike", "pos": "形容詞", "m": "孩子般的", "theme": "個性與情緒形容詞"}, {"id": 64, "w": "confident", "pos": "形容詞", "m": "有自信的", "theme": "個性與情緒形容詞"}, {"id": 65, "w": "considerate", "pos": "形容詞", "m": "體貼的", "theme": "個性與情緒形容詞"}, {"id": 66, "w": "cool", "pos": "形容詞", "m": "酷的", "theme": "個性與情緒形容詞"}, {"id": 67, "w": "crazy", "pos": "形容詞", "m": "瘋狂的", "theme": "個性與情緒形容詞"}, {"id": 68, "w": "cruel", "pos": "形容詞", "m": "殘忍的", "theme": "個性與情緒形容詞"}, {"id": 69, "w": "curious", "pos": "形容詞", "m": "好奇的", "theme": "個性與情緒形容詞"}, {"id": 70, "w": "diligent", "pos": "形容詞", "m": "勤奮的", "theme": "個性與情緒形容詞"}, {"id": 71, "w": "dishonest", "pos": "形容詞", "m": "不誠實的", "theme": "個性與情緒形容詞"}, {"id": 72, "w": "evil", "pos": "形容詞", "m": "邪惡的", "theme": "個性與情緒形容詞"}, {"id": 73, "w": "energetic", "pos": "形容詞", "m": "精力充沛的", "theme": "個性與情緒形容詞"}, {"id": 74, "w": "excited", "pos": "形容詞", "m": "感到興奮的", "theme": "個性與情緒形容詞"}, {"id": 75, "w": "exciting", "pos": "形容詞", "m": "令人興奮的", "theme": "個性與情緒形容詞"}, {"id": 76, "w": "famous", "pos": "形容詞", "m": "著名的", "theme": "個性與情緒形容詞"}, {"id": 77, "w": "foolish", "pos": "形容詞", "m": "愚蠢的", "theme": "個性與情緒形容詞"}, {"id": 78, "w": "frank", "pos": "形容詞", "m": "坦率的", "theme": "個性與情緒形容詞"}, {"id": 79, "w": "friendly", "pos": "形容詞", "m": "友善的", "theme": "個性與情緒形容詞"}, {"id": 80, "w": "funny", "pos": "形容詞", "m": "有趣的", "theme": "個性與情緒形容詞"}, {"id": 81, "w": "gentle", "pos": "形容詞", "m": "溫和的", "theme": "個性與情緒形容詞"}, {"id": 82, "w": "generous", "pos": "形容詞", "m": "慷慨的", "theme": "個性與情緒形容詞"}, {"id": 83, "w": "greedy", "pos": "形容詞", "m": "貪心的", "theme": "個性與情緒形容詞"}, {"id": 84, "w": "happy", "pos": "形容詞", "m": "快樂的", "theme": "個性與情緒形容詞"}, {"id": 85, "w": "hard-working", "pos": "形容詞", "m": "努力工作的", "theme": "個性與情緒形容詞"}, {"id": 86, "w": "honest", "pos": "形容詞", "m": "誠實的", "theme": "個性與情緒形容詞"}, {"id": 87, "w": "humble", "pos": "形容詞", "m": "謙虛的", "theme": "個性與情緒形容詞"}, {"id": 88, "w": "humorous", "pos": "形容詞", "m": "幽默的", "theme": "個性與情緒形容詞"}, {"id": 89, "w": "impolite", "pos": "形容詞", "m": "不禮貌的", "theme": "個性與情緒形容詞"}, {"id": 90, "w": "intelligent", "pos": "形容詞", "m": "有智慧的", "theme": "個性與情緒形容詞"}, {"id": 91, "w": "interested", "pos": "形容詞", "m": "感興趣的", "theme": "個性與情緒形容詞"}, {"id": 92, "w": "jealous", "pos": "形容詞", "m": "嫉妒的", "theme": "個性與情緒形容詞"}, {"id": 93, "w": "kind", "pos": "形容詞", "m": "仁慈的；親切的", "theme": "個性與情緒形容詞"}, {"id": 94, "w": "lazy", "pos": "形容詞", "m": "懶惰的", "theme": "個性與情緒形容詞"}, {"id": 95, "w": "lonely", "pos": "形容詞", "m": "孤獨的", "theme": "個性與情緒形容詞"}, {"id": 96, "w": "lovely", "pos": "形容詞", "m": "可愛的", "theme": "個性與情緒形容詞"}, {"id": 97, "w": "mad", "pos": "形容詞", "m": "瘋狂的", "theme": "個性與情緒形容詞"}, {"id": 98, "w": "naughty", "pos": "形容詞", "m": "頑皮的", "theme": "個性與情緒形容詞"}, {"id": 99, "w": "nervous", "pos": "形容詞", "m": "緊張的", "theme": "個性與情緒形容詞"}, {"id": 100, "w": "patient", "pos": "形容詞", "m": "有耐心的", "theme": "個性與情緒形容詞"}, {"id": 101, "w": "polite", "pos": "形容詞", "m": "有禮貌的", "theme": "個性與情緒形容詞"}, {"id": 102, "w": "poor", "pos": "形容詞", "m": "貧窮的；可憐的", "theme": "個性與情緒形容詞"}, {"id": 103, "w": "proud", "pos": "形容詞", "m": "驕傲的", "theme": "個性與情緒形容詞"}, {"id": 104, "w": "rich", "pos": "形容詞", "m": "有錢的", "theme": "個性與情緒形容詞"}, {"id": 105, "w": "rude", "pos": "形容詞", "m": "粗魯的", "theme": "個性與情緒形容詞"}, {"id": 106, "w": "sad", "pos": "形容詞", "m": "難過的", "theme": "個性與情緒形容詞"}, {"id": 107, "w": "scared", "pos": "形容詞", "m": "害怕的", "theme": "個性與情緒形容詞"}, {"id": 108, "w": "selfish", "pos": "形容詞", "m": "自私的", "theme": "個性與情緒形容詞"}, {"id": 109, "w": "shy", "pos": "形容詞", "m": "害羞的", "theme": "個性與情緒形容詞"}, {"id": 110, "w": "silly", "pos": "形容詞", "m": "傻的", "theme": "個性與情緒形容詞"}, {"id": 111, "w": "sincere", "pos": "形容詞", "m": "真誠的", "theme": "個性與情緒形容詞"}, {"id": 112, "w": "smart", "pos": "形容詞", "m": "聰明的", "theme": "個性與情緒形容詞"}, {"id": 113, "w": "sneaky", "pos": "形容詞", "m": "鬼鬼祟祟的", "theme": "個性與情緒形容詞"}, {"id": 114, "w": "stingy", "pos": "形容詞", "m": "小氣的", "theme": "個性與情緒形容詞"}, {"id": 115, "w": "stupid", "pos": "形容詞", "m": "笨的", "theme": "個性與情緒形容詞"}, {"id": 116, "w": "successful", "pos": "形容詞", "m": "成功的", "theme": "個性與情緒形容詞"}, {"id": 117, "w": "talkative", "pos": "形容詞", "m": "健談的", "theme": "個性與情緒形容詞"}, {"id": 118, "w": "unhappy", "pos": "形容詞", "m": "不快樂的", "theme": "個性與情緒形容詞"}, {"id": 119, "w": "wise", "pos": "形容詞", "m": "有智慧的", "theme": "個性與情緒形容詞"}, {"id": 120, "w": "beard", "pos": "名詞", "m": "鬍鬚", "theme": "身體部位"}, {"id": 121, "w": "chin", "pos": "名詞", "m": "下巴", "theme": "身體部位"}, {"id": 122, "w": "ear", "pos": "名詞", "m": "耳朵", "theme": "身體部位"}, {"id": 123, "w": "eye", "pos": "名詞", "m": "眼睛", "theme": "身體部位"}, {"id": 124, "w": "face", "pos": "名詞", "m": "臉", "theme": "身體部位"}, {"id": 125, "w": "hair", "pos": "名詞", "m": "頭髮", "theme": "身體部位"}, {"id": 126, "w": "lip", "pos": "名詞", "m": "嘴唇", "theme": "身體部位"}, {"id": 127, "w": "mouth", "pos": "名詞", "m": "嘴巴", "theme": "身體部位"}, {"id": 128, "w": "nose", "pos": "名詞", "m": "鼻子", "theme": "身體部位"}, {"id": 129, "w": "tongue", "pos": "名詞", "m": "舌頭", "theme": "身體部位"}, {"id": 130, "w": "tooth", "pos": "名詞", "m": "牙齒", "theme": "身體部位"}, {"id": 131, "w": "ankle", "pos": "名詞", "m": "腳踝", "theme": "身體部位"}, {"id": 132, "w": "arm", "pos": "名詞", "m": "手臂", "theme": "身體部位"}, {"id": 133, "w": "back", "pos": "名詞", "m": "背部", "theme": "身體部位"}, {"id": 134, "w": "body", "pos": "名詞", "m": "身體", "theme": "身體部位"}, {"id": 135, "w": "bone", "pos": "名詞", "m": "骨頭", "theme": "身體部位"}, {"id": 136, "w": "finger", "pos": "名詞", "m": "手指", "theme": "身體部位"}, {"id": 137, "w": "foot", "pos": "名詞", "m": "腳", "theme": "身體部位"}, {"id": 138, "w": "hand", "pos": "名詞", "m": "手", "theme": "身體部位"}, {"id": 139, "w": "head", "pos": "名詞", "m": "頭", "theme": "身體部位"}, {"id": 140, "w": "hip", "pos": "名詞", "m": "臀部", "theme": "身體部位"}, {"id": 141, "w": "knee", "pos": "名詞", "m": "膝蓋", "theme": "身體部位"}, {"id": 142, "w": "leg", "pos": "名詞", "m": "腿", "theme": "身體部位"}, {"id": 143, "w": "nail", "pos": "名詞", "m": "指甲", "theme": "身體部位"}, {"id": 144, "w": "neck", "pos": "名詞", "m": "脖子", "theme": "身體部位"}, {"id": 145, "w": "shoulder", "pos": "名詞", "m": "肩膀", "theme": "身體部位"}, {"id": 146, "w": "skin", "pos": "名詞", "m": "皮膚", "theme": "身體部位"}, {"id": 147, "w": "throat", "pos": "名詞", "m": "喉嚨", "theme": "身體部位"}, {"id": 148, "w": "thumb", "pos": "名詞", "m": "拇指", "theme": "身體部位"}, {"id": 149, "w": "toe", "pos": "名詞", "m": "腳趾", "theme": "身體部位"}, {"id": 150, "w": "waist", "pos": "名詞", "m": "腰部", "theme": "身體部位"}, {"id": 151, "w": "wrist", "pos": "名詞", "m": "手腕", "theme": "身體部位"}, {"id": 152, "w": "heart", "pos": "名詞", "m": "心臟", "theme": "身體部位"}, {"id": 153, "w": "stomach", "pos": "名詞", "m": "胃", "theme": "身體部位"}, {"id": 154, "w": "comfortable", "pos": "形容詞", "m": "舒服的", "theme": "健康狀態與疾病"}, {"id": 155, "w": "dizzy", "pos": "形容詞", "m": "頭暈的", "theme": "健康狀態與疾病"}, {"id": 156, "w": "healthy", "pos": "形容詞", "m": "健康的", "theme": "健康狀態與疾病"}, {"id": 157, "w": "painful", "pos": "形容詞", "m": "疼痛的", "theme": "健康狀態與疾病"}, {"id": 158, "w": "pale", "pos": "形容詞", "m": "蒼白的", "theme": "健康狀態與疾病"}, {"id": 159, "w": "sick", "pos": "形容詞", "m": "生病的", "theme": "健康狀態與疾病"}, {"id": 160, "w": "strong", "pos": "形容詞", "m": "強壯的", "theme": "健康狀態與疾病"}, {"id": 161, "w": "tired", "pos": "形容詞", "m": "疲倦的", "theme": "健康狀態與疾病"}, {"id": 162, "w": "weak", "pos": "形容詞", "m": "虛弱的", "theme": "健康狀態與疾病"}, {"id": 163, "w": "well", "pos": "形容詞", "m": "身體健康的", "theme": "健康狀態與疾病"}, {"id": 164, "w": "wound", "pos": "名詞", "m": "創傷；傷口", "theme": "健康狀態與疾病"}, {"id": 165, "w": "cancer", "pos": "名詞", "m": "癌症", "theme": "健康狀態與疾病"}, {"id": 166, "w": "cold", "pos": "名詞", "m": "感冒", "theme": "健康狀態與疾病"}, {"id": 167, "w": "flu", "pos": "名詞", "m": "流行性感冒", "theme": "健康狀態與疾病"}, {"id": 168, "w": "headache", "pos": "名詞", "m": "頭痛", "theme": "健康狀態與疾病"}, {"id": 169, "w": "stomachache", "pos": "名詞", "m": "胃痛", "theme": "健康狀態與疾病"}, {"id": 170, "w": "toothache", "pos": "名詞", "m": "牙痛", "theme": "健康狀態與疾病"}, {"id": 171, "w": "cough", "pos": "名詞", "m": "咳嗽", "theme": "健康狀態與疾病"}, {"id": 172, "w": "fever", "pos": "名詞", "m": "發燒", "theme": "健康狀態與疾病"}, {"id": 173, "w": "pain", "pos": "名詞", "m": "疼痛", "theme": "健康狀態與疾病"}, {"id": 174, "w": "sore throat", "pos": "名詞", "m": "喉嚨痛", "theme": "健康狀態與疾病"}, {"id": 175, "w": "cure", "pos": "動詞", "m": "治癒", "theme": "健康狀態與疾病"}, {"id": 176, "w": "recover", "pos": "動詞", "m": "恢復；痊癒", "theme": "健康狀態與疾病"}, {"id": 177, "w": "death", "pos": "名詞", "m": "死亡", "theme": "健康狀態與疾病"}, {"id": 178, "w": "health", "pos": "名詞", "m": "健康", "theme": "健康狀態與疾病"}, {"id": 179, "w": "life", "pos": "名詞", "m": "生命", "theme": "健康狀態與疾病"}, {"id": 180, "w": "medicine", "pos": "名詞", "m": "藥物；醫學", "theme": "健康狀態與疾病"}, {"id": 181, "w": "aunt", "pos": "名詞", "m": "阿姨", "theme": "家庭成員與婚姻"}, {"id": 182, "w": "brother", "pos": "名詞", "m": "兄弟", "theme": "家庭成員與婚姻"}, {"id": 183, "w": "cousin", "pos": "名詞", "m": "堂(表)兄弟姊妹", "theme": "家庭成員與婚姻"}, {"id": 184, "w": "daughter", "pos": "名詞", "m": "女兒", "theme": "家庭成員與婚姻"}, {"id": 185, "w": "elder", "pos": "名詞", "m": "長輩", "theme": "家庭成員與婚姻"}, {"id": 186, "w": "family", "pos": "名詞", "m": "家庭", "theme": "家庭成員與婚姻"}, {"id": 187, "w": "father", "pos": "名詞", "m": "父親", "theme": "家庭成員與婚姻"}, {"id": 188, "w": "granddaughter", "pos": "名詞", "m": "孫女", "theme": "家庭成員與婚姻"}, {"id": 189, "w": "grandfather", "pos": "名詞", "m": "祖父", "theme": "家庭成員與婚姻"}, {"id": 190, "w": "grandmother", "pos": "名詞", "m": "祖母", "theme": "家庭成員與婚姻"}, {"id": 191, "w": "grandson", "pos": "名詞", "m": "孫子", "theme": "家庭成員與婚姻"}, {"id": 192, "w": "husband", "pos": "名詞", "m": "丈夫", "theme": "家庭成員與婚姻"}, {"id": 193, "w": "mother", "pos": "名詞", "m": "母親", "theme": "家庭成員與婚姻"}, {"id": 194, "w": "nephew", "pos": "名詞", "m": "侄子；外甥", "theme": "家庭成員與婚姻"}, {"id": 195, "w": "niece", "pos": "名詞", "m": "姪女；外甥女", "theme": "家庭成員與婚姻"}, {"id": 196, "w": "parent", "pos": "名詞", "m": "父母", "theme": "家庭成員與婚姻"}, {"id": 197, "w": "relative", "pos": "名詞", "m": "親戚", "theme": "家庭成員與婚姻"}, {"id": 198, "w": "sister", "pos": "名詞", "m": "姊妹", "theme": "家庭成員與婚姻"}, {"id": 199, "w": "son", "pos": "名詞", "m": "兒子", "theme": "家庭成員與婚姻"}, {"id": 200, "w": "uncle", "pos": "名詞", "m": "叔叔；舅舅", "theme": "家庭成員與婚姻"}, {"id": 201, "w": "wife", "pos": "名詞", "m": "妻子", "theme": "家庭成員與婚姻"}, {"id": 202, "w": "grow", "pos": "動詞", "m": "成長；生長", "theme": "家庭成員與婚姻"}, {"id": 203, "w": "live", "pos": "動詞", "m": "居住；生活", "theme": "家庭成員與婚姻"}, {"id": 204, "w": "marry", "pos": "動詞", "m": "結婚", "theme": "家庭成員與婚姻"}, {"id": 205, "w": "married", "pos": "形容詞", "m": "已婚的", "theme": "家庭成員與婚姻"}, {"id": 206, "w": "zero", "pos": "名詞", "m": "零", "theme": "數字與數量"}, {"id": 207, "w": "one", "pos": "名詞", "m": "一", "theme": "數字與數量"}, {"id": 208, "w": "two", "pos": "名詞", "m": "二", "theme": "數字與數量"}, {"id": 209, "w": "three", "pos": "名詞", "m": "三", "theme": "數字與數量"}, {"id": 210, "w": "four", "pos": "名詞", "m": "四", "theme": "數字與數量"}, {"id": 211, "w": "five", "pos": "名詞", "m": "五", "theme": "數字與數量"}, {"id": 212, "w": "six", "pos": "名詞", "m": "六", "theme": "數字與數量"}, {"id": 213, "w": "seven", "pos": "名詞", "m": "七", "theme": "數字與數量"}, {"id": 214, "w": "eight", "pos": "名詞", "m": "八", "theme": "數字與數量"}, {"id": 215, "w": "nine", "pos": "名詞", "m": "九", "theme": "數字與數量"}, {"id": 216, "w": "ten", "pos": "名詞", "m": "十", "theme": "數字與數量"}, {"id": 217, "w": "eleven", "pos": "名詞", "m": "十一", "theme": "數字與數量"}, {"id": 218, "w": "twelve", "pos": "名詞", "m": "十二", "theme": "數字與數量"}, {"id": 219, "w": "thirteen", "pos": "名詞", "m": "十三", "theme": "數字與數量"}, {"id": 220, "w": "fourteen", "pos": "名詞", "m": "十四", "theme": "數字與數量"}, {"id": 221, "w": "fifteen", "pos": "名詞", "m": "十五", "theme": "數字與數量"}, {"id": 222, "w": "sixteen", "pos": "名詞", "m": "十六", "theme": "數字與數量"}, {"id": 223, "w": "seventeen", "pos": "名詞", "m": "十七", "theme": "數字與數量"}, {"id": 224, "w": "eighteen", "pos": "名詞", "m": "十八", "theme": "數字與數量"}, {"id": 225, "w": "nineteen", "pos": "名詞", "m": "十九", "theme": "數字與數量"}, {"id": 226, "w": "twenty", "pos": "名詞", "m": "二十", "theme": "數字與數量"}, {"id": 227, "w": "thirty", "pos": "名詞", "m": "三十", "theme": "數字與數量"}, {"id": 228, "w": "forty", "pos": "名詞", "m": "四十", "theme": "數字與數量"}, {"id": 229, "w": "fifty", "pos": "名詞", "m": "五十", "theme": "數字與數量"}, {"id": 230, "w": "sixty", "pos": "名詞", "m": "六十", "theme": "數字與數量"}, {"id": 231, "w": "seventy", "pos": "名詞", "m": "七十", "theme": "數字與數量"}, {"id": 232, "w": "eighty", "pos": "名詞", "m": "八十", "theme": "數字與數量"}, {"id": 233, "w": "ninety", "pos": "名詞", "m": "九十", "theme": "數字與數量"}, {"id": 234, "w": "hundred", "pos": "名詞", "m": "百", "theme": "數字與數量"}, {"id": 235, "w": "thousand", "pos": "名詞", "m": "千", "theme": "數字與數量"}, {"id": 236, "w": "million", "pos": "名詞", "m": "百萬", "theme": "數字與數量"}, {"id": 237, "w": "first", "pos": "名詞", "m": "第一", "theme": "數字與數量"}, {"id": 238, "w": "second", "pos": "名詞", "m": "第二", "theme": "數字與數量"}, {"id": 239, "w": "third", "pos": "名詞", "m": "第三", "theme": "數字與數量"}, {"id": 240, "w": "last", "pos": "形容詞", "m": "最後的", "theme": "數字與數量"}, {"id": 241, "w": "a few", "pos": "限定詞", "m": "一些（用於可數）", "theme": "數字與數量"}, {"id": 242, "w": "a little", "pos": "限定詞", "m": "一點（用於不可數）", "theme": "數字與數量"}, {"id": 243, "w": "a lot", "pos": "副詞", "m": "很多", "theme": "數字與數量"}, {"id": 244, "w": "any", "pos": "限定詞", "m": "任何", "theme": "數字與數量"}, {"id": 245, "w": "both", "pos": "限定詞", "m": "兩者都", "theme": "數字與數量"}, {"id": 246, "w": "few", "pos": "限定詞", "m": "很少（用於可數）", "theme": "數字與數量"}, {"id": 247, "w": "less", "pos": "限定詞", "m": "更少（用於不可數）", "theme": "數字與數量"}, {"id": 248, "w": "little", "pos": "限定詞", "m": "很少（用於不可數）", "theme": "數字與數量"}, {"id": 249, "w": "number", "pos": "名詞", "m": "數字；數量", "theme": "數字與數量"}, {"id": 250, "w": "several", "pos": "限定詞", "m": "幾個", "theme": "數字與數量"}, {"id": 251, "w": "total", "pos": "名詞", "m": "總數", "theme": "數字與數量"}, {"id": 252, "w": "dawn", "pos": "名詞", "m": "黎明", "theme": "時刻／星期／時鐘"}, {"id": 253, "w": "morning", "pos": "名詞", "m": "早晨", "theme": "時刻／星期／時鐘"}, {"id": 254, "w": "noon", "pos": "名詞", "m": "中午", "theme": "時刻／星期／時鐘"}, {"id": 255, "w": "afternoon", "pos": "名詞", "m": "下午", "theme": "時刻／星期／時鐘"}, {"id": 256, "w": "evening", "pos": "名詞", "m": "傍晚", "theme": "時刻／星期／時鐘"}, {"id": 257, "w": "night", "pos": "名詞", "m": "夜晚", "theme": "時刻／星期／時鐘"}, {"id": 258, "w": "midnight", "pos": "名詞", "m": "午夜", "theme": "時刻／星期／時鐘"}, {"id": 259, "w": "Monday", "pos": "名詞", "m": "星期一", "theme": "時刻／星期／時鐘"}, {"id": 260, "w": "Tuesday", "pos": "名詞", "m": "星期二", "theme": "時刻／星期／時鐘"}, {"id": 261, "w": "Wednesday", "pos": "名詞", "m": "星期三", "theme": "時刻／星期／時鐘"}, {"id": 262, "w": "Thursday", "pos": "名詞", "m": "星期四", "theme": "時刻／星期／時鐘"}, {"id": 263, "w": "Friday", "pos": "名詞", "m": "星期五", "theme": "時刻／星期／時鐘"}, {"id": 264, "w": "Saturday", "pos": "名詞", "m": "星期六", "theme": "時刻／星期／時鐘"}, {"id": 265, "w": "Sunday", "pos": "名詞", "m": "星期日", "theme": "時刻／星期／時鐘"}, {"id": 266, "w": "week", "pos": "名詞", "m": "星期；週", "theme": "時刻／星期／時鐘"}, {"id": 267, "w": "weekday", "pos": "名詞", "m": "平日（週一至週五）", "theme": "時刻／星期／時鐘"}, {"id": 268, "w": "weekend", "pos": "名詞", "m": "週末", "theme": "時刻／星期／時鐘"}, {"id": 269, "w": "month", "pos": "名詞", "m": "月", "theme": "時刻／星期／時鐘"}, {"id": 270, "w": "January", "pos": "名詞", "m": "一月", "theme": "時刻／星期／時鐘"}, {"id": 271, "w": "February", "pos": "名詞", "m": "二月", "theme": "時刻／星期／時鐘"}, {"id": 272, "w": "March", "pos": "名詞", "m": "三月", "theme": "時刻／星期／時鐘"}, {"id": 273, "w": "April", "pos": "名詞", "m": "四月", "theme": "時刻／星期／時鐘"}, {"id": 274, "w": "May", "pos": "名詞", "m": "五月", "theme": "時刻／星期／時鐘"}, {"id": 275, "w": "June", "pos": "名詞", "m": "六月", "theme": "時刻／星期／時鐘"}, {"id": 276, "w": "July", "pos": "名詞", "m": "七月", "theme": "時刻／星期／時鐘"}, {"id": 277, "w": "August", "pos": "名詞", "m": "八月", "theme": "時刻／星期／時鐘"}, {"id": 278, "w": "September", "pos": "名詞", "m": "九月", "theme": "時刻／星期／時鐘"}, {"id": 279, "w": "October", "pos": "名詞", "m": "十月", "theme": "時刻／星期／時鐘"}, {"id": 280, "w": "November", "pos": "名詞", "m": "十一月", "theme": "時刻／星期／時鐘"}, {"id": 281, "w": "December", "pos": "名詞", "m": "十二月", "theme": "時刻／星期／時鐘"}, {"id": 282, "w": "season", "pos": "名詞", "m": "季節", "theme": "時刻／星期／時鐘"}, {"id": 283, "w": "spring", "pos": "名詞", "m": "春天", "theme": "時刻／星期／時鐘"}, {"id": 284, "w": "summer", "pos": "名詞", "m": "夏天", "theme": "時刻／星期／時鐘"}, {"id": 285, "w": "autumn", "pos": "名詞", "m": "秋天", "theme": "時刻／星期／時鐘"}, {"id": 286, "w": "winter", "pos": "名詞", "m": "冬天", "theme": "時刻／星期／時鐘"}, {"id": 287, "w": "alarm clock", "pos": "名詞", "m": "鬧鐘", "theme": "時刻／星期／時鐘"}, {"id": 288, "w": "calendar", "pos": "名詞", "m": "日曆", "theme": "時刻／星期／時鐘"}, {"id": 289, "w": "clock", "pos": "名詞", "m": "時鐘", "theme": "時刻／星期／時鐘"}, {"id": 290, "w": "watch", "pos": "名詞", "m": "手錶", "theme": "時刻／星期／時鐘"}, {"id": 291, "w": "stopwatch", "pos": "名詞", "m": "碼表", "theme": "時刻／星期／時鐘"}, {"id": 292, "w": "half", "pos": "名詞", "m": "一半", "theme": "時刻／星期／時鐘"}, {"id": 293, "w": "hour", "pos": "名詞", "m": "小時", "theme": "時刻／星期／時鐘"}, {"id": 294, "w": "minute", "pos": "名詞", "m": "分鐘", "theme": "時刻／星期／時鐘"}, {"id": 295, "w": "moment", "pos": "名詞", "m": "片刻", "theme": "時刻／星期／時鐘"}, {"id": 296, "w": "o’clock", "pos": "副詞", "m": "…點鐘", "theme": "時刻／星期／時鐘"}, {"id": 297, "w": "past", "pos": "介系詞", "m": "過（用於時間）", "theme": "時刻／星期／時鐘"}, {"id": 298, "w": "quarter", "pos": "名詞", "m": "一刻鐘；四分之一", "theme": "時刻／星期／時鐘"}, {"id": 299, "w": "second", "pos": "名詞", "m": "秒", "theme": "時刻／星期／時鐘"}, {"id": 300, "w": "time", "pos": "名詞", "m": "時間", "theme": "時刻／星期／時鐘"}, {"id": 301, "w": "ago", "pos": "副詞", "m": "以前", "theme": "時間副詞"}, {"id": 302, "w": "already", "pos": "副詞", "m": "已經", "theme": "時間副詞"}, {"id": 303, "w": "current", "pos": "形容詞", "m": "當前的", "theme": "時間副詞"}, {"id": 304, "w": "early", "pos": "形容詞", "m": "早的", "theme": "時間副詞"}, {"id": 305, "w": "last", "pos": "形容詞", "m": "上一個的；最後的", "theme": "時間副詞"}, {"id": 306, "w": "late", "pos": "形容詞", "m": "晚的", "theme": "時間副詞"}, {"id": 307, "w": "later", "pos": "副詞", "m": "稍後", "theme": "時間副詞"}, {"id": 308, "w": "next", "pos": "形容詞", "m": "下一個的", "theme": "時間副詞"}, {"id": 309, "w": "now", "pos": "副詞", "m": "現在", "theme": "時間副詞"}, {"id": 310, "w": "once", "pos": "副詞", "m": "曾經；一次", "theme": "時間副詞"}, {"id": 311, "w": "future", "pos": "名詞", "m": "未來", "theme": "時間副詞"}, {"id": 312, "w": "soon", "pos": "副詞", "m": "很快；不久", "theme": "時間副詞"}, {"id": 313, "w": "today", "pos": "名詞", "m": "今天", "theme": "時間副詞"}, {"id": 314, "w": "tonight", "pos": "名詞", "m": "今晚", "theme": "時間副詞"}, {"id": 315, "w": "tomorrow", "pos": "名詞", "m": "明天", "theme": "時間副詞"}, {"id": 316, "w": "week", "pos": "名詞", "m": "星期；週", "theme": "時間副詞"}, {"id": 317, "w": "weekend", "pos": "名詞", "m": "週末", "theme": "時間副詞"}, {"id": 318, "w": "year", "pos": "名詞", "m": "年", "theme": "時間副詞"}, {"id": 319, "w": "yesterday", "pos": "名詞", "m": "昨天", "theme": "時間副詞"}, {"id": 320, "w": "daily", "pos": "形容詞", "m": "每日的", "theme": "時間副詞"}, {"id": 321, "w": "bill", "pos": "名詞", "m": "帳單；紙鈔", "theme": "金錢與消費"}, {"id": 322, "w": "cash", "pos": "名詞", "m": "現金", "theme": "金錢與消費"}, {"id": 323, "w": "cent", "pos": "名詞", "m": "分（貨幣單位）", "theme": "金錢與消費"}, {"id": 324, "w": "change", "pos": "名詞", "m": "零錢", "theme": "金錢與消費"}, {"id": 325, "w": "coin", "pos": "名詞", "m": "硬幣", "theme": "金錢與消費"}, {"id": 326, "w": "credit card", "pos": "名詞", "m": "信用卡", "theme": "金錢與消費"}, {"id": 327, "w": "dollar", "pos": "名詞", "m": "元（貨幣單位）", "theme": "金錢與消費"}, {"id": 328, "w": "money", "pos": "名詞", "m": "錢", "theme": "金錢與消費"}, {"id": 329, "w": "price", "pos": "名詞", "m": "價格", "theme": "金錢與消費"}, {"id": 330, "w": "borrow", "pos": "動詞", "m": "借入", "theme": "金錢與消費"}, {"id": 331, "w": "buy", "pos": "動詞", "m": "購買", "theme": "金錢與消費"}, {"id": 332, "w": "charge", "pos": "動詞", "m": "收費", "theme": "金錢與消費"}, {"id": 333, "w": "cost", "pos": "動詞", "m": "花費", "theme": "金錢與消費"}, {"id": 334, "w": "earn", "pos": "動詞", "m": "賺取", "theme": "金錢與消費"}, {"id": 335, "w": "lend", "pos": "動詞", "m": "借出", "theme": "金錢與消費"}, {"id": 336, "w": "pay", "pos": "動詞", "m": "支付", "theme": "金錢與消費"}, {"id": 337, "w": "spend", "pos": "動詞", "m": "花費", "theme": "金錢與消費"}, {"id": 338, "w": "cheap", "pos": "形容詞", "m": "便宜的", "theme": "金錢與消費"}, {"id": 339, "w": "expensive", "pos": "形容詞", "m": "昂貴的", "theme": "金錢與消費"}, {"id": 340, "w": "fruit", "pos": "名詞", "m": "水果", "theme": "蔬果與肉類"}, {"id": 341, "w": "apple", "pos": "名詞", "m": "蘋果", "theme": "蔬果與肉類"}, {"id": 342, "w": "banana", "pos": "名詞", "m": "香蕉", "theme": "蔬果與肉類"}, {"id": 343, "w": "grape", "pos": "名詞", "m": "葡萄", "theme": "蔬果與肉類"}, {"id": 344, "w": "guava", "pos": "名詞", "m": "番石榴", "theme": "蔬果與肉類"}, {"id": 345, "w": "lemon", "pos": "名詞", "m": "檸檬", "theme": "蔬果與肉類"}, {"id": 346, "w": "mango", "pos": "名詞", "m": "芒果", "theme": "蔬果與肉類"}, {"id": 347, "w": "orange", "pos": "名詞", "m": "柳橙", "theme": "蔬果與肉類"}, {"id": 348, "w": "papaya", "pos": "名詞", "m": "木瓜", "theme": "蔬果與肉類"}, {"id": 349, "w": "peach", "pos": "名詞", "m": "桃子", "theme": "蔬果與肉類"}, {"id": 350, "w": "pear", "pos": "名詞", "m": "梨子", "theme": "蔬果與肉類"}, {"id": 351, "w": "pineapple", "pos": "名詞", "m": "鳳梨", "theme": "蔬果與肉類"}, {"id": 352, "w": "strawberry", "pos": "名詞", "m": "草莓", "theme": "蔬果與肉類"}, {"id": 353, "w": "tangerine", "pos": "名詞", "m": "橘子", "theme": "蔬果與肉類"}, {"id": 354, "w": "tomato", "pos": "名詞", "m": "番茄", "theme": "蔬果與肉類"}, {"id": 355, "w": "watermelon", "pos": "名詞", "m": "西瓜", "theme": "蔬果與肉類"}, {"id": 356, "w": "vegetable", "pos": "名詞", "m": "蔬菜", "theme": "蔬果與肉類"}, {"id": 357, "w": "bean", "pos": "名詞", "m": "豆子", "theme": "蔬果與肉類"}, {"id": 358, "w": "cabbage", "pos": "名詞", "m": "高麗菜", "theme": "蔬果與肉類"}, {"id": 359, "w": "carrot", "pos": "名詞", "m": "胡蘿蔔", "theme": "蔬果與肉類"}, {"id": 360, "w": "corn", "pos": "名詞", "m": "玉米", "theme": "蔬果與肉類"}, {"id": 361, "w": "lettuce", "pos": "名詞", "m": "生菜", "theme": "蔬果與肉類"}, {"id": 362, "w": "nut", "pos": "名詞", "m": "堅果", "theme": "蔬果與肉類"}, {"id": 363, "w": "onion", "pos": "名詞", "m": "洋蔥", "theme": "蔬果與肉類"}, {"id": 364, "w": "potato", "pos": "名詞", "m": "馬鈴薯", "theme": "蔬果與肉類"}, {"id": 365, "w": "pumpkin", "pos": "名詞", "m": "南瓜", "theme": "蔬果與肉類"}, {"id": 366, "w": "meat", "pos": "名詞", "m": "肉", "theme": "蔬果與肉類"}, {"id": 367, "w": "beef", "pos": "名詞", "m": "牛肉", "theme": "日常料理與麵食"}, {"id": 368, "w": "bread", "pos": "名詞", "m": "麵包", "theme": "日常料理與麵食"}, {"id": 369, "w": "bun", "pos": "名詞", "m": "小圓麵包", "theme": "日常料理與麵食"}, {"id": 370, "w": "cereal", "pos": "名詞", "m": "穀物麥片", "theme": "日常料理與麵食"}, {"id": 371, "w": "chicken", "pos": "名詞", "m": "雞肉", "theme": "日常料理與麵食"}, {"id": 372, "w": "dumpling", "pos": "名詞", "m": "餃子", "theme": "日常料理與麵食"}, {"id": 373, "w": "egg", "pos": "名詞", "m": "蛋", "theme": "日常料理與麵食"}, {"id": 374, "w": "fast food", "pos": "名詞", "m": "速食", "theme": "日常料理與麵食"}, {"id": 375, "w": "fish", "pos": "名詞", "m": "魚", "theme": "日常料理與麵食"}, {"id": 376, "w": "flour", "pos": "名詞", "m": "麵粉", "theme": "日常料理與麵食"}, {"id": 377, "w": "food", "pos": "名詞", "m": "食物", "theme": "日常料理與麵食"}, {"id": 378, "w": "fries", "pos": "名詞", "m": "薯條", "theme": "日常料理與麵食"}, {"id": 379, "w": "ham", "pos": "名詞", "m": "火腿", "theme": "日常料理與麵食"}, {"id": 380, "w": "hamburger", "pos": "名詞", "m": "漢堡", "theme": "日常料理與麵食"}, {"id": 381, "w": "hot dog", "pos": "名詞", "m": "熱狗", "theme": "日常料理與麵食"}, {"id": 382, "w": "instant noodle", "pos": "名詞", "m": "泡麵", "theme": "日常料理與麵食"}, {"id": 383, "w": "noodle", "pos": "名詞", "m": "麵條", "theme": "日常料理與麵食"}, {"id": 384, "w": "pizza", "pos": "名詞", "m": "披薩", "theme": "日常料理與麵食"}, {"id": 385, "w": "pork", "pos": "名詞", "m": "豬肉", "theme": "日常料理與麵食"}, {"id": 386, "w": "rice", "pos": "名詞", "m": "米飯", "theme": "日常料理與麵食"}, {"id": 387, "w": "salad", "pos": "名詞", "m": "沙拉", "theme": "日常料理與麵食"}, {"id": 388, "w": "sandwich", "pos": "名詞", "m": "三明治", "theme": "日常料理與麵食"}, {"id": 389, "w": "seafood", "pos": "名詞", "m": "海鮮", "theme": "日常料理與麵食"}, {"id": 390, "w": "shrimp", "pos": "名詞", "m": "蝦", "theme": "日常料理與麵食"}, {"id": 391, "w": "soup", "pos": "名詞", "m": "湯", "theme": "日常料理與麵食"}, {"id": 392, "w": "spaghetti", "pos": "名詞", "m": "義大利麵", "theme": "日常料理與麵食"}, {"id": 393, "w": "steak", "pos": "名詞", "m": "牛排", "theme": "日常料理與麵食"}, {"id": 394, "w": "tofu", "pos": "名詞", "m": "豆腐", "theme": "日常料理與麵食"}, {"id": 395, "w": "breakfast", "pos": "名詞", "m": "早餐", "theme": "日常料理與麵食"}, {"id": 396, "w": "brunch", "pos": "名詞", "m": "早午餐", "theme": "日常料理與麵食"}, {"id": 397, "w": "dinner", "pos": "名詞", "m": "晚餐", "theme": "日常料理與麵食"}, {"id": 398, "w": "lunch", "pos": "名詞", "m": "午餐", "theme": "日常料理與麵食"}, {"id": 399, "w": "meal", "pos": "名詞", "m": "一餐", "theme": "日常料理與麵食"}, {"id": 400, "w": "snack", "pos": "名詞", "m": "點心", "theme": "日常料理與麵食"}, {"id": 401, "w": "supper", "pos": "名詞", "m": "消夜", "theme": "日常料理與麵食"}, {"id": 402, "w": "beer", "pos": "名詞", "m": "啤酒", "theme": "日常料理與麵食"}, {"id": 403, "w": "coffee", "pos": "名詞", "m": "咖啡", "theme": "飲料與甜點"}, {"id": 404, "w": "cola", "pos": "名詞", "m": "可樂", "theme": "飲料與甜點"}, {"id": 405, "w": "drink", "pos": "動詞", "m": "喝", "theme": "飲料與甜點"}, {"id": 406, "w": "ice", "pos": "名詞", "m": "冰", "theme": "飲料與甜點"}, {"id": 407, "w": "juice", "pos": "名詞", "m": "果汁", "theme": "飲料與甜點"}, {"id": 408, "w": "liquid", "pos": "名詞", "m": "液體", "theme": "飲料與甜點"}, {"id": 409, "w": "milk", "pos": "名詞", "m": "牛奶", "theme": "飲料與甜點"}, {"id": 410, "w": "milk shake", "pos": "名詞", "m": "奶昔", "theme": "飲料與甜點"}, {"id": 411, "w": "soda", "pos": "名詞", "m": "汽水", "theme": "飲料與甜點"}, {"id": 412, "w": "soft drink", "pos": "名詞", "m": "軟性飲料", "theme": "飲料與甜點"}, {"id": 413, "w": "tea", "pos": "名詞", "m": "茶", "theme": "飲料與甜點"}, {"id": 414, "w": "water", "pos": "名詞", "m": "水", "theme": "飲料與甜點"}, {"id": 415, "w": "cake", "pos": "名詞", "m": "蛋糕", "theme": "飲料與甜點"}, {"id": 416, "w": "candy", "pos": "名詞", "m": "糖果", "theme": "飲料與甜點"}, {"id": 417, "w": "cheese", "pos": "名詞", "m": "起司", "theme": "飲料與甜點"}, {"id": 418, "w": "chocolate", "pos": "名詞", "m": "巧克力", "theme": "飲料與甜點"}, {"id": 419, "w": "cookie", "pos": "名詞", "m": "餅乾", "theme": "飲料與甜點"}, {"id": 420, "w": "dessert", "pos": "名詞", "m": "甜點", "theme": "飲料與甜點"}, {"id": 421, "w": "doughnut", "pos": "名詞", "m": "甜甜圈", "theme": "飲料與甜點"}, {"id": 422, "w": "ice cream", "pos": "名詞", "m": "冰淇淋", "theme": "飲料與甜點"}, {"id": 423, "w": "moon cake", "pos": "名詞", "m": "月餅", "theme": "飲料與甜點"}, {"id": 424, "w": "pie", "pos": "名詞", "m": "派", "theme": "飲料與甜點"}, {"id": 425, "w": "popcorn", "pos": "名詞", "m": "爆米花", "theme": "飲料與甜點"}, {"id": 426, "w": "toast", "pos": "名詞", "m": "吐司", "theme": "飲料與甜點"}, {"id": 427, "w": "butter", "pos": "名詞", "m": "奶油", "theme": "飲料與甜點"}, {"id": 428, "w": "ketchup", "pos": "名詞", "m": "番茄醬", "theme": "飲料與甜點"}, {"id": 429, "w": "cream", "pos": "名詞", "m": "鮮奶油", "theme": "飲料與甜點"}, {"id": 430, "w": "jam", "pos": "名詞", "m": "果醬", "theme": "飲料與甜點"}, {"id": 431, "w": "oil", "pos": "名詞", "m": "油", "theme": "飲料與甜點"}, {"id": 432, "w": "pepper", "pos": "名詞", "m": "胡椒", "theme": "飲料與甜點"}, {"id": 433, "w": "soy sauce", "pos": "名詞", "m": "醬油", "theme": "飲料與甜點"}, {"id": 434, "w": "salt", "pos": "名詞", "m": "鹽", "theme": "飲料與甜點"}, {"id": 435, "w": "sugar", "pos": "名詞", "m": "糖", "theme": "飲料與甜點"}, {"id": 436, "w": "vinegar", "pos": "名詞", "m": "醋", "theme": "味覺與烹飪動詞"}, {"id": 437, "w": "hungry", "pos": "形容詞", "m": "餓的", "theme": "味覺與烹飪動詞"}, {"id": 438, "w": "full", "pos": "形容詞", "m": "飽的", "theme": "味覺與烹飪動詞"}, {"id": 439, "w": "thirsty", "pos": "形容詞", "m": "渴的", "theme": "味覺與烹飪動詞"}, {"id": 440, "w": "bitter", "pos": "形容詞", "m": "苦的", "theme": "味覺與烹飪動詞"}, {"id": 441, "w": "delicious", "pos": "形容詞", "m": "美味的", "theme": "味覺與烹飪動詞"}, {"id": 442, "w": "hot", "pos": "形容詞", "m": "辣的；熱的", "theme": "味覺與烹飪動詞"}, {"id": 443, "w": "sour", "pos": "形容詞", "m": "酸的", "theme": "味覺與烹飪動詞"}, {"id": 444, "w": "sweet", "pos": "形容詞", "m": "甜的", "theme": "味覺與烹飪動詞"}, {"id": 445, "w": "yummy", "pos": "形容詞", "m": "好吃的", "theme": "味覺與烹飪動詞"}, {"id": 446, "w": "bake", "pos": "動詞", "m": "烘烤", "theme": "味覺與烹飪動詞"}, {"id": 447, "w": "boil", "pos": "動詞", "m": "煮沸", "theme": "味覺與烹飪動詞"}, {"id": 448, "w": "burn", "pos": "動詞", "m": "燒焦", "theme": "味覺與烹飪動詞"}, {"id": 449, "w": "cook", "pos": "動詞", "m": "烹調", "theme": "味覺與烹飪動詞"}, {"id": 450, "w": "eat", "pos": "動詞", "m": "吃", "theme": "味覺與烹飪動詞"}, {"id": 451, "w": "order", "pos": "動詞", "m": "點餐", "theme": "味覺與烹飪動詞"}, {"id": 452, "w": "spread", "pos": "動詞", "m": "塗抹", "theme": "味覺與烹飪動詞"}, {"id": 453, "w": "menu", "pos": "名詞", "m": "菜單", "theme": "味覺與烹飪動詞"}, {"id": 454, "w": "diet", "pos": "名詞", "m": "飲食；節食", "theme": "味覺與烹飪動詞"}, {"id": 455, "w": "slice", "pos": "動詞", "m": "切片", "theme": "味覺與烹飪動詞"}, {"id": 456, "w": "bowl", "pos": "名詞", "m": "碗", "theme": "餐具"}, {"id": 457, "w": "chopsticks", "pos": "名詞", "m": "筷子", "theme": "餐具"}, {"id": 458, "w": "cup", "pos": "名詞", "m": "杯子", "theme": "餐具"}, {"id": 459, "w": "dish", "pos": "名詞", "m": "盤子", "theme": "餐具"}, {"id": 460, "w": "fork", "pos": "名詞", "m": "叉子", "theme": "餐具"}, {"id": 461, "w": "glass", "pos": "名詞", "m": "玻璃杯", "theme": "餐具"}, {"id": 462, "w": "knife", "pos": "名詞", "m": "刀子", "theme": "餐具"}, {"id": 463, "w": "napkin", "pos": "名詞", "m": "餐巾", "theme": "餐具"}, {"id": 464, "w": "plate", "pos": "名詞", "m": "平盤", "theme": "餐具"}, {"id": 465, "w": "spoon", "pos": "名詞", "m": "湯匙", "theme": "餐具"}, {"id": 466, "w": "straw", "pos": "名詞", "m": "吸管", "theme": "餐具"}, {"id": 467, "w": "blouse", "pos": "名詞", "m": "女裝上衣", "theme": "衣物"}, {"id": 468, "w": "coat", "pos": "名詞", "m": "外套", "theme": "衣物"}, {"id": 469, "w": "dress", "pos": "名詞", "m": "連身裙", "theme": "衣物"}, {"id": 470, "w": "jacket", "pos": "名詞", "m": "夾克", "theme": "衣物"}, {"id": 471, "w": "jeans", "pos": "名詞", "m": "牛仔褲", "theme": "衣物"}, {"id": 472, "w": "pajamas", "pos": "名詞", "m": "睡衣", "theme": "衣物"}, {"id": 473, "w": "pants", "pos": "名詞", "m": "褲子", "theme": "衣物"}, {"id": 474, "w": "raincoat", "pos": "名詞", "m": "雨衣", "theme": "衣物"}, {"id": 475, "w": "shirt", "pos": "名詞", "m": "襯衫", "theme": "衣物"}, {"id": 476, "w": "T-shirt", "pos": "名詞", "m": "T恤", "theme": "衣物"}, {"id": 477, "w": "shorts", "pos": "名詞", "m": "短褲", "theme": "衣物"}, {"id": 478, "w": "skirt", "pos": "名詞", "m": "裙子", "theme": "衣物"}, {"id": 479, "w": "suit", "pos": "名詞", "m": "西裝", "theme": "衣物"}, {"id": 480, "w": "sweater", "pos": "名詞", "m": "毛衣", "theme": "衣物"}, {"id": 481, "w": "swimsuit", "pos": "名詞", "m": "泳衣", "theme": "衣物"}, {"id": 482, "w": "uniform", "pos": "名詞", "m": "制服", "theme": "衣物"}, {"id": 483, "w": "underwear", "pos": "名詞", "m": "內衣", "theme": "衣物"}, {"id": 484, "w": "vest", "pos": "名詞", "m": "背心", "theme": "衣物"}, {"id": 485, "w": "belt", "pos": "名詞", "m": "皮帶", "theme": "衣物"}, {"id": 486, "w": "button", "pos": "名詞", "m": "鈕扣", "theme": "衣物"}, {"id": 487, "w": "cap", "pos": "名詞", "m": "棒球帽", "theme": "衣物"}, {"id": 488, "w": "comb", "pos": "名詞", "m": "梳子", "theme": "衣物"}, {"id": 489, "w": "contact lens", "pos": "名詞", "m": "隱形眼鏡", "theme": "衣物"}, {"id": 490, "w": "earrings", "pos": "名詞", "m": "耳環", "theme": "衣物"}, {"id": 491, "w": "glove", "pos": "名詞", "m": "手套", "theme": "衣物"}, {"id": 492, "w": "handkerchief", "pos": "名詞", "m": "手帕", "theme": "衣物"}, {"id": 493, "w": "mask", "pos": "名詞", "m": "口罩；面具", "theme": "衣物"}, {"id": 494, "w": "necklace", "pos": "名詞", "m": "項鍊", "theme": "衣物"}, {"id": 495, "w": "pocket", "pos": "名詞", "m": "口袋", "theme": "衣物"}, {"id": 496, "w": "purse", "pos": "名詞", "m": "錢包（女用）", "theme": "衣物"}, {"id": 497, "w": "ring", "pos": "名詞", "m": "戒指", "theme": "衣物"}, {"id": 498, "w": "scarf", "pos": "名詞", "m": "圍巾", "theme": "衣物"}, {"id": 499, "w": "shoes", "pos": "名詞", "m": "鞋子", "theme": "衣物"}, {"id": 500, "w": "slippers", "pos": "名詞", "m": "拖鞋", "theme": "衣物配件"}, {"id": 501, "w": "sneakers", "pos": "名詞", "m": "運動鞋", "theme": "衣物配件"}, {"id": 502, "w": "socks", "pos": "名詞", "m": "襪子", "theme": "衣物配件"}, {"id": 503, "w": "tie", "pos": "名詞", "m": "領帶", "theme": "衣物配件"}, {"id": 504, "w": "umbrella", "pos": "名詞", "m": "雨傘", "theme": "衣物配件"}, {"id": 505, "w": "wallet", "pos": "名詞", "m": "皮夾（男用）", "theme": "衣物配件"}, {"id": 506, "w": "hole", "pos": "名詞", "m": "破洞", "theme": "衣物配件"}, {"id": 507, "w": "spot", "pos": "名詞", "m": "污點", "theme": "衣物配件"}, {"id": 508, "w": "clothes", "pos": "名詞", "m": "衣服（總稱）", "theme": "衣物配件"}, {"id": 509, "w": "cotton", "pos": "名詞", "m": "棉", "theme": "材質與顏色"}, {"id": 510, "w": "diamond", "pos": "名詞", "m": "鑽石", "theme": "材質與顏色"}, {"id": 511, "w": "gold", "pos": "名詞", "m": "黃金", "theme": "材質與顏色"}, {"id": 512, "w": "silver", "pos": "名詞", "m": "銀", "theme": "材質與顏色"}, {"id": 513, "w": "iron", "pos": "動詞", "m": "熨燙", "theme": "材質與顏色"}, {"id": 514, "w": "wear", "pos": "動詞", "m": "穿著", "theme": "材質與顏色"}, {"id": 515, "w": "black", "pos": "名詞", "m": "黑色", "theme": "材質與顏色"}, {"id": 516, "w": "blue", "pos": "名詞", "m": "藍色", "theme": "材質與顏色"}, {"id": 517, "w": "brown", "pos": "名詞", "m": "棕色", "theme": "材質與顏色"}, {"id": 518, "w": "color", "pos": "名詞", "m": "顏色", "theme": "材質與顏色"}, {"id": 519, "w": "gray", "pos": "名詞", "m": "灰色", "theme": "材質與顏色"}, {"id": 520, "w": "green", "pos": "名詞", "m": "綠色", "theme": "材質與顏色"}, {"id": 521, "w": "orange", "pos": "名詞", "m": "橙色", "theme": "材質與顏色"}, {"id": 522, "w": "pink", "pos": "名詞", "m": "粉色", "theme": "材質與顏色"}, {"id": 523, "w": "purple", "pos": "名詞", "m": "紫色", "theme": "材質與顏色"}, {"id": 524, "w": "red", "pos": "名詞", "m": "紅色", "theme": "材質與顏色"}, {"id": 525, "w": "white", "pos": "名詞", "m": "白色", "theme": "材質與顏色"}, {"id": 526, "w": "yellow", "pos": "名詞", "m": "黃色", "theme": "材質與顏色"}, {"id": 527, "w": "badminton", "pos": "名詞", "m": "羽毛球", "theme": "球類運動"}, {"id": 528, "w": "ball", "pos": "名詞", "m": "球", "theme": "球類運動"}, {"id": 529, "w": "baseball", "pos": "名詞", "m": "棒球", "theme": "球類運動"}, {"id": 530, "w": "basketball", "pos": "名詞", "m": "籃球", "theme": "球類運動"}, {"id": 531, "w": "dodge ball", "pos": "名詞", "m": "躲避球", "theme": "球類運動"}, {"id": 532, "w": "football", "pos": "名詞", "m": "美式足球", "theme": "球類運動"}, {"id": 533, "w": "frisbee", "pos": "名詞", "m": "飛盤", "theme": "球類運動"}, {"id": 534, "w": "golf", "pos": "名詞", "m": "高爾夫球", "theme": "球類運動"}, {"id": 535, "w": "race", "pos": "名詞", "m": "賽跑；競賽", "theme": "球類運動"}, {"id": 536, "w": "soccer", "pos": "名詞", "m": "足球", "theme": "球類運動"}, {"id": 537, "w": "softball", "pos": "名詞", "m": "壘球", "theme": "球類運動"}, {"id": 538, "w": "sports", "pos": "名詞", "m": "運動", "theme": "球類運動"}, {"id": 539, "w": "table tennis", "pos": "名詞", "m": "桌球", "theme": "球類運動"}, {"id": 540, "w": "tennis", "pos": "名詞", "m": "網球", "theme": "球類運動"}, {"id": 541, "w": "volleyball", "pos": "名詞", "m": "排球", "theme": "球類運動"}, {"id": 542, "w": "barbecue", "pos": "動詞", "m": "烤肉", "theme": "休閒活動"}, {"id": 543, "w": "bowling", "pos": "名詞", "m": "保齡球", "theme": "休閒活動"}, {"id": 544, "w": "camp", "pos": "動詞", "m": "露營", "theme": "休閒活動"}, {"id": 545, "w": "climb", "pos": "動詞", "m": "攀爬", "theme": "休閒活動"}, {"id": 546, "w": "dance", "pos": "動詞", "m": "跳舞", "theme": "休閒活動"}, {"id": 547, "w": "draw", "pos": "動詞", "m": "畫畫", "theme": "休閒活動"}, {"id": 548, "w": "exercise", "pos": "動詞", "m": "運動", "theme": "休閒活動"}, {"id": 549, "w": "fish", "pos": "動詞", "m": "釣魚", "theme": "休閒活動"}, {"id": 550, "w": "hike", "pos": "動詞", "m": "健行／遠足", "theme": "休閒活動"}, {"id": 551, "w": "jog", "pos": "動詞", "m": "慢跑", "theme": "休閒活動"}, {"id": 552, "w": "picnic", "pos": "名詞", "m": "野餐", "theme": "休閒活動"}, {"id": 553, "w": "roller blade", "pos": "動詞", "m": "溜直排輪", "theme": "休閒活動"}, {"id": 554, "w": "roller skate", "pos": "動詞", "m": "溜輪鞋", "theme": "休閒活動"}, {"id": 555, "w": "run", "pos": "動詞", "m": "跑步", "theme": "休閒活動"}, {"id": 556, "w": "sail", "pos": "動詞", "m": "航行", "theme": "休閒活動"}, {"id": 557, "w": "sing", "pos": "動詞", "m": "唱歌", "theme": "休閒活動"}, {"id": 558, "w": "skate", "pos": "動詞", "m": "溜冰", "theme": "休閒活動"}, {"id": 559, "w": "ski", "pos": "動詞", "m": "滑雪", "theme": "休閒活動"}, {"id": 560, "w": "stamp", "pos": "名詞", "m": "郵票", "theme": "休閒活動"}, {"id": 561, "w": "surf", "pos": "動詞", "m": "衝浪", "theme": "休閒活動"}, {"id": 562, "w": "swim", "pos": "動詞", "m": "游泳", "theme": "休閒活動"}, {"id": 563, "w": "travel", "pos": "動詞", "m": "旅行", "theme": "休閒活動"}, {"id": 564, "w": "trip", "pos": "名詞", "m": "旅行", "theme": "休閒活動"}, {"id": 565, "w": "hobby", "pos": "名詞", "m": "嗜好", "theme": "休閒活動"}, {"id": 566, "w": "band", "pos": "名詞", "m": "樂團", "theme": "娛樂嗜好與樂器"}, {"id": 567, "w": "card", "pos": "名詞", "m": "卡片", "theme": "娛樂嗜好與樂器"}, {"id": 568, "w": "cartoon", "pos": "名詞", "m": "卡通", "theme": "娛樂嗜好與樂器"}, {"id": 569, "w": "chess", "pos": "名詞", "m": "西洋棋", "theme": "娛樂嗜好與樂器"}, {"id": 570, "w": "comic", "pos": "名詞", "m": "漫書", "theme": "娛樂嗜好與樂器"}, {"id": 571, "w": "computer game", "pos": "名詞", "m": "電腦遊戲", "theme": "娛樂嗜好與樂器"}, {"id": 572, "w": "doll", "pos": "名詞", "m": "洋娃娃", "theme": "娛樂嗜好與樂器"}, {"id": 573, "w": "drama", "pos": "名詞", "m": "戲劇", "theme": "娛樂嗜好與樂器"}, {"id": 574, "w": "drum", "pos": "名詞", "m": "鼓", "theme": "娛樂嗜好與樂器"}, {"id": 575, "w": "film", "pos": "名詞", "m": "電影", "theme": "娛樂嗜好與樂器"}, {"id": 576, "w": "flute", "pos": "名詞", "m": "長笛", "theme": "娛樂嗜好與樂器"}, {"id": 577, "w": "game", "pos": "名詞", "m": "遊戲", "theme": "娛樂嗜好與樂器"}, {"id": 578, "w": "guitar", "pos": "名詞", "m": "吉他", "theme": "娛樂嗜好與樂器"}, {"id": 579, "w": "instrument", "pos": "名詞", "m": "樂器", "theme": "娛樂嗜好與樂器"}, {"id": 580, "w": "movie", "pos": "名詞", "m": "電影", "theme": "娛樂嗜好與樂器"}, {"id": 581, "w": "music", "pos": "名詞", "m": "音樂", "theme": "娛樂嗜好與樂器"}, {"id": 582, "w": "novel", "pos": "名詞", "m": "小說", "theme": "娛樂嗜好與樂器"}, {"id": 583, "w": "paint", "pos": "動詞", "m": "繪畫", "theme": "娛樂嗜好與樂器"}, {"id": 584, "w": "piano", "pos": "名詞", "m": "鋼琴", "theme": "娛樂嗜好與樂器"}, {"id": 585, "w": "pop music", "pos": "名詞", "m": "流行音樂", "theme": "娛樂嗜好與樂器"}, {"id": 586, "w": "puzzle", "pos": "名詞", "m": "拼圖；謎題", "theme": "娛樂嗜好與樂器"}, {"id": 587, "w": "song", "pos": "名詞", "m": "歌曲", "theme": "娛樂嗜好與樂器"}, {"id": 588, "w": "team", "pos": "名詞", "m": "隊伍", "theme": "娛樂嗜好與樂器"}, {"id": 589, "w": "tent", "pos": "名詞", "m": "帳篷", "theme": "娛樂嗜好與樂器"}, {"id": 590, "w": "toy", "pos": "名詞", "m": "玩具", "theme": "娛樂嗜好與樂器"}, {"id": 591, "w": "trumpet", "pos": "名詞", "m": "小喇叭", "theme": "娛樂嗜好與樂器"}, {"id": 592, "w": "violin", "pos": "名詞", "m": "小提琴", "theme": "娛樂嗜好與樂器"}, {"id": 593, "w": "lose", "pos": "動詞", "m": "輸掉；失去", "theme": "輸贏"}, {"id": 594, "w": "loser", "pos": "名詞", "m": "輸家", "theme": "輸贏"}, {"id": 595, "w": "win", "pos": "動詞", "m": "贏得", "theme": "輸贏"}, {"id": 596, "w": "winner", "pos": "名詞", "m": "贏家", "theme": "輸贏"}, {"id": 597, "w": "fan", "pos": "名詞", "m": "粉絲；愛好者", "theme": "輸贏"}, {"id": 598, "w": "apartment", "pos": "名詞", "m": "公寓", "theme": "房屋與空間"}, {"id": 599, "w": "building", "pos": "名詞", "m": "建築物", "theme": "房屋與空間"}, {"id": 600, "w": "house", "pos": "名詞", "m": "房子", "theme": "房屋與空間"}, {"id": 601, "w": "home", "pos": "名詞", "m": "家", "theme": "房屋與空間"}, {"id": 602, "w": "basement", "pos": "名詞", "m": "地下室", "theme": "房屋與空間"}, {"id": 603, "w": "bathroom", "pos": "名詞", "m": "浴室", "theme": "房屋與空間"}, {"id": 604, "w": "bedroom", "pos": "名詞", "m": "臥室", "theme": "房屋與空間"}, {"id": 605, "w": "dining room", "pos": "名詞", "m": "餐廳", "theme": "房屋與空間"}, {"id": 606, "w": "fence", "pos": "名詞", "m": "柵欄", "theme": "房屋與空間"}, {"id": 607, "w": "garage", "pos": "名詞", "m": "車庫", "theme": "房屋與空間"}, {"id": 608, "w": "garden", "pos": "名詞", "m": "花園", "theme": "房屋與空間"}, {"id": 609, "w": "hall", "pos": "名詞", "m": "走廊；大廳", "theme": "房屋與空間"}, {"id": 610, "w": "kitchen", "pos": "名詞", "m": "廚房", "theme": "房屋與空間"}, {"id": 611, "w": "living room", "pos": "名詞", "m": "客廳", "theme": "房屋與空間"}, {"id": 612, "w": "room", "pos": "名詞", "m": "房間", "theme": "房屋與空間"}, {"id": 613, "w": "yard", "pos": "名詞", "m": "院子", "theme": "房屋與空間"}, {"id": 614, "w": "balcony", "pos": "名詞", "m": "陽台", "theme": "房屋與空間"}, {"id": 615, "w": "ceiling", "pos": "名詞", "m": "天花板", "theme": "房屋與空間"}, {"id": 616, "w": "door", "pos": "名詞", "m": "門", "theme": "房屋與空間"}, {"id": 617, "w": "downstairs", "pos": "名詞", "m": "樓下", "theme": "房屋與空間"}, {"id": 618, "w": "floor", "pos": "名詞", "m": "地板；樓層", "theme": "房屋與空間"}, {"id": 619, "w": "gate", "pos": "名詞", "m": "大門", "theme": "房屋與空間"}, {"id": 620, "w": "roof", "pos": "名詞", "m": "屋頂", "theme": "房屋與空間"}, {"id": 621, "w": "stairs", "pos": "名詞", "m": "樓梯", "theme": "房屋與空間"}, {"id": 622, "w": "upstairs", "pos": "名詞", "m": "樓上", "theme": "房屋與空間"}, {"id": 623, "w": "wall", "pos": "名詞", "m": "牆", "theme": "房屋與空間"}, {"id": 624, "w": "window", "pos": "名詞", "m": "窗戶", "theme": "房屋與空間"}, {"id": 625, "w": "furniture", "pos": "名詞", "m": "家具", "theme": "房屋與空間"}, {"id": 626, "w": "armchair", "pos": "名詞", "m": "扶手椅", "theme": "家具與寢具"}, {"id": 627, "w": "bath", "pos": "名詞", "m": "浴缸", "theme": "家具與寢具"}, {"id": 628, "w": "bed", "pos": "名詞", "m": "床", "theme": "家具與寢具"}, {"id": 629, "w": "bench", "pos": "名詞", "m": "長凳", "theme": "家具與寢具"}, {"id": 630, "w": "bookcase", "pos": "名詞", "m": "書櫃", "theme": "家具與寢具"}, {"id": 631, "w": "chair", "pos": "名詞", "m": "椅子", "theme": "家具與寢具"}, {"id": 632, "w": "closet", "pos": "名詞", "m": "衣櫥", "theme": "家具與寢具"}, {"id": 633, "w": "couch", "pos": "名詞", "m": "長沙發", "theme": "家具與寢具"}, {"id": 634, "w": "curtain", "pos": "名詞", "m": "窗簾", "theme": "家具與寢具"}, {"id": 635, "w": "desk", "pos": "名詞", "m": "書桌", "theme": "家具與寢具"}, {"id": 636, "w": "drawer", "pos": "名詞", "m": "抽屜", "theme": "家具與寢具"}, {"id": 637, "w": "faucet", "pos": "名詞", "m": "水龍頭", "theme": "家具與寢具"}, {"id": 638, "w": "lamp", "pos": "名詞", "m": "燈", "theme": "家具與寢具"}, {"id": 639, "w": "light", "pos": "名詞", "m": "燈；光", "theme": "家具與寢具"}, {"id": 640, "w": "mirror", "pos": "名詞", "m": "鏡子", "theme": "家具與寢具"}, {"id": 641, "w": "shelf", "pos": "名詞", "m": "架子", "theme": "家具與寢具"}, {"id": 642, "w": "sink", "pos": "名詞", "m": "水槽", "theme": "家具與寢具"}, {"id": 643, "w": "sofa", "pos": "名詞", "m": "沙發", "theme": "家具與寢具"}, {"id": 644, "w": "table", "pos": "名詞", "m": "桌子", "theme": "家具與寢具"}, {"id": 645, "w": "tub", "pos": "名詞", "m": "浴缸", "theme": "家具與寢具"}, {"id": 646, "w": "blanket", "pos": "名詞", "m": "毯子", "theme": "家具與寢具"}, {"id": 647, "w": "carpet", "pos": "名詞", "m": "地毯", "theme": "家具與寢具"}, {"id": 648, "w": "hanger", "pos": "名詞", "m": "衣架", "theme": "家具與寢具"}, {"id": 649, "w": "pillow", "pos": "名詞", "m": "枕頭", "theme": "家具與寢具"}, {"id": 650, "w": "sheet", "pos": "名詞", "m": "床單", "theme": "家具與寢具"}, {"id": 651, "w": "toothbrush", "pos": "名詞", "m": "牙刷", "theme": "家具與寢具"}, {"id": 652, "w": "soap", "pos": "名詞", "m": "肥皂", "theme": "家具與寢具"}, {"id": 653, "w": "towel", "pos": "名詞", "m": "毛巾", "theme": "家具與寢具"}, {"id": 654, "w": "air conditioner", "pos": "名詞", "m": "空調", "theme": "家電用品"}, {"id": 655, "w": "camera", "pos": "名詞", "m": "相機", "theme": "家電用品"}, {"id": 656, "w": "computer", "pos": "名詞", "m": "電腦", "theme": "家電用品"}, {"id": 657, "w": "dresser", "pos": "名詞", "m": "梳妝台", "theme": "家電用品"}, {"id": 658, "w": "dryer", "pos": "名詞", "m": "烘乾機", "theme": "家電用品"}, {"id": 659, "w": "fan", "pos": "名詞", "m": "電風扇", "theme": "家電用品"}, {"id": 660, "w": "flashlight", "pos": "名詞", "m": "手電筒", "theme": "家電用品"}, {"id": 661, "w": "freezer", "pos": "名詞", "m": "冷凍庫", "theme": "家電用品"}, {"id": 662, "w": "heater", "pos": "名詞", "m": "暖氣", "theme": "家電用品"}, {"id": 663, "w": "machine", "pos": "名詞", "m": "機器", "theme": "家電用品"}, {"id": 664, "w": "oven", "pos": "名詞", "m": "烤箱", "theme": "家電用品"}, {"id": 665, "w": "radio", "pos": "名詞", "m": "收音機", "theme": "家電用品"}, {"id": 666, "w": "refrigerator", "pos": "名詞", "m": "冰箱", "theme": "家電用品"}, {"id": 667, "w": "speaker", "pos": "名詞", "m": "喇叭", "theme": "家電用品"}, {"id": 668, "w": "stove", "pos": "名詞", "m": "爐子", "theme": "家電用品"}, {"id": 669, "w": "telephone", "pos": "名詞", "m": "電話", "theme": "家電用品"}, {"id": 670, "w": "television", "pos": "名詞", "m": "電視", "theme": "家電用品"}, {"id": 671, "w": "video", "pos": "名詞", "m": "影片；錄影機", "theme": "家電用品"}, {"id": 672, "w": "printer", "pos": "名詞", "m": "印表機", "theme": "家電用品"}, {"id": 673, "w": "basket", "pos": "名詞", "m": "籃子", "theme": "家電用品"}, {"id": 674, "w": "brick", "pos": "名詞", "m": "磚塊", "theme": "家用雜物與家務動詞"}, {"id": 675, "w": "bucket", "pos": "名詞", "m": "水桶", "theme": "家用雜物與家務動詞"}, {"id": 676, "w": "candle", "pos": "名詞", "m": "蠟燭", "theme": "家用雜物與家務動詞"}, {"id": 677, "w": "hammer", "pos": "名詞", "m": "鐵鎚", "theme": "家用雜物與家務動詞"}, {"id": 678, "w": "housework", "pos": "名詞", "m": "家事", "theme": "家用雜物與家務動詞"}, {"id": 679, "w": "key", "pos": "名詞", "m": "鑰匙", "theme": "家用雜物與家務動詞"}, {"id": 680, "w": "mat", "pos": "名詞", "m": "地墊", "theme": "家用雜物與家務動詞"}, {"id": 681, "w": "needle", "pos": "名詞", "m": "針", "theme": "家用雜物與家務動詞"}, {"id": 682, "w": "pan", "pos": "名詞", "m": "平底鍋", "theme": "家用雜物與家務動詞"}, {"id": 683, "w": "teapot", "pos": "名詞", "m": "茶壺", "theme": "家用雜物與家務動詞"}, {"id": 684, "w": "umbrella", "pos": "名詞", "m": "雨傘", "theme": "家用雜物與家務動詞"}, {"id": 685, "w": "toilet", "pos": "名詞", "m": "馬桶", "theme": "家用雜物與家務動詞"}, {"id": 686, "w": "trash can", "pos": "名詞", "m": "垃圾桶", "theme": "家用雜物與家務動詞"}, {"id": 687, "w": "wok", "pos": "名詞", "m": "炒鍋", "theme": "家用雜物與家務動詞"}, {"id": 688, "w": "tube", "pos": "名詞", "m": "管子", "theme": "家用雜物與家務動詞"}, {"id": 689, "w": "build", "pos": "動詞", "m": "建造", "theme": "家用雜物與家務動詞"}, {"id": 690, "w": "clean", "pos": "動詞", "m": "清潔", "theme": "家用雜物與家務動詞"}, {"id": 691, "w": "decorate", "pos": "動詞", "m": "裝飾", "theme": "家用雜物與家務動詞"}, {"id": 692, "w": "design", "pos": "動詞", "m": "設計", "theme": "家用雜物與家務動詞"}, {"id": 693, "w": "fix", "pos": "動詞", "m": "修理", "theme": "家用雜物與家務動詞"}, {"id": 694, "w": "repair", "pos": "動詞", "m": "修復", "theme": "家用雜物與家務動詞"}, {"id": 695, "w": "sweep", "pos": "動詞", "m": "清掃", "theme": "家用雜物與家務動詞"}, {"id": 696, "w": "wash", "pos": "動詞", "m": "清洗", "theme": "家用雜物與家務動詞"}, {"id": 697, "w": "street", "pos": "名詞", "m": "街道", "theme": "學校與校園設施"}, {"id": 698, "w": "elementary school", "pos": "名詞", "m": "小學", "theme": "學校與校園設施"}, {"id": 699, "w": "junior high school", "pos": "名詞", "m": "初中", "theme": "學校與校園設施"}, {"id": 700, "w": "kindergarten", "pos": "名詞", "m": "幼兒園", "theme": "學校與校園設施"}, {"id": 701, "w": "school", "pos": "名詞", "m": "學校", "theme": "學校與校園設施"}, {"id": 702, "w": "senior high school", "pos": "名詞", "m": "高中", "theme": "學校與校園設施"}, {"id": 703, "w": "university", "pos": "名詞", "m": "大學", "theme": "學校與校園設施"}, {"id": 704, "w": "campus", "pos": "名詞", "m": "校園", "theme": "學校與校園設施"}, {"id": 705, "w": "classroom", "pos": "名詞", "m": "教室", "theme": "學校與校園設施"}, {"id": 706, "w": "guard", "pos": "名詞", "m": "警衛", "theme": "學校與校園設施"}, {"id": 707, "w": "gym", "pos": "名詞", "m": "體育館", "theme": "學校與校園設施"}, {"id": 708, "w": "playground", "pos": "名詞", "m": "操場；遊樂場", "theme": "學校與校園設施"}, {"id": 709, "w": "library", "pos": "名詞", "m": "圖書館", "theme": "學校與校園設施"}, {"id": 710, "w": "seesaw", "pos": "名詞", "m": "翹翹板", "theme": "學校與校園設施"}, {"id": 711, "w": "slide", "pos": "名詞", "m": "溜滑梯", "theme": "學校與校園設施"}, {"id": 712, "w": "board", "pos": "名詞", "m": "板子", "theme": "文具用品"}, {"id": 713, "w": "blackboard", "pos": "名詞", "m": "黑板", "theme": "文具用品"}, {"id": 714, "w": "book", "pos": "名詞", "m": "書本", "theme": "文具用品"}, {"id": 715, "w": "chalk", "pos": "名詞", "m": "粉筆", "theme": "文具用品"}, {"id": 716, "w": "crayon", "pos": "名詞", "m": "蠟筆", "theme": "文具用品"}, {"id": 717, "w": "diary", "pos": "名詞", "m": "日記", "theme": "文具用品"}, {"id": 718, "w": "dictionary", "pos": "名詞", "m": "字典", "theme": "文具用品"}, {"id": 719, "w": "envelope", "pos": "名詞", "m": "信封", "theme": "文具用品"}, {"id": 720, "w": "eraser", "pos": "名詞", "m": "橡皮擦", "theme": "文具用品"}, {"id": 721, "w": "glasses", "pos": "名詞", "m": "眼鏡", "theme": "文具用品"}, {"id": 722, "w": "glue", "pos": "名詞", "m": "膠水", "theme": "文具用品"}, {"id": 723, "w": "ink", "pos": "名詞", "m": "墨水", "theme": "文具用品"}, {"id": 724, "w": "letter", "pos": "名詞", "m": "信件；字母", "theme": "文具用品"}, {"id": 725, "w": "magazine", "pos": "名詞", "m": "雜誌", "theme": "文具用品"}, {"id": 726, "w": "map", "pos": "名詞", "m": "地圖", "theme": "文具用品"}, {"id": 727, "w": "marker", "pos": "名詞", "m": "麥克筆", "theme": "文具用品"}, {"id": 728, "w": "notebook", "pos": "名詞", "m": "筆記本", "theme": "文具用品"}, {"id": 729, "w": "page", "pos": "名詞", "m": "頁", "theme": "文具用品"}, {"id": 730, "w": "paper", "pos": "名詞", "m": "紙", "theme": "文具用品"}, {"id": 731, "w": "pen", "pos": "名詞", "m": "筆", "theme": "文具用品"}, {"id": 732, "w": "pencil", "pos": "名詞", "m": "鉛筆", "theme": "文具用品"}, {"id": 733, "w": "pencil box", "pos": "名詞", "m": "鉛筆盒", "theme": "文具用品"}, {"id": 734, "w": "picture", "pos": "名詞", "m": "圖片", "theme": "文具用品"}, {"id": 735, "w": "postcard", "pos": "名詞", "m": "明信片", "theme": "文具用品"}, {"id": 736, "w": "present", "pos": "名詞", "m": "禮物", "theme": "文具用品"}, {"id": 737, "w": "ruler", "pos": "名詞", "m": "尺", "theme": "文具用品"}, {"id": 738, "w": "sheet", "pos": "名詞", "m": "一張（紙）", "theme": "文具用品"}, {"id": 739, "w": "textbook", "pos": "名詞", "m": "教科書", "theme": "文具用品"}, {"id": 740, "w": "workbook", "pos": "名詞", "m": "練習本", "theme": "文具用品"}, {"id": 741, "w": "backpack", "pos": "名詞", "m": "背包", "theme": "文具用品"}, {"id": 742, "w": "course", "pos": "名詞", "m": "課程", "theme": "學科"}, {"id": 743, "w": "art", "pos": "名詞", "m": "藝術", "theme": "學科"}, {"id": 744, "w": "Chinese", "pos": "名詞", "m": "中文", "theme": "學科"}, {"id": 745, "w": "English", "pos": "名詞", "m": "英文", "theme": "學科"}, {"id": 746, "w": "geography", "pos": "名詞", "m": "地理", "theme": "學科"}, {"id": 747, "w": "history", "pos": "名詞", "m": "歷史", "theme": "學科"}, {"id": 748, "w": "biology", "pos": "名詞", "m": "生物", "theme": "學科"}, {"id": 749, "w": "chemistry", "pos": "名詞", "m": "化學", "theme": "學科"}, {"id": 750, "w": "physics", "pos": "名詞", "m": "物理", "theme": "學科"}, {"id": 751, "w": "language", "pos": "名詞", "m": "語言", "theme": "學科"}, {"id": 752, "w": "law", "pos": "名詞", "m": "法律", "theme": "學科"}, {"id": 753, "w": "math", "pos": "名詞", "m": "數學", "theme": "學科"}, {"id": 754, "w": "music", "pos": "名詞", "m": "音樂", "theme": "學科"}, {"id": 755, "w": "science", "pos": "名詞", "m": "科學", "theme": "學科"}, {"id": 756, "w": "social science", "pos": "名詞", "m": "社會科學", "theme": "學科"}, {"id": 757, "w": "cheerleader", "pos": "名詞", "m": "啦啦隊", "theme": "學校角色"}, {"id": 758, "w": "class leader", "pos": "名詞", "m": "班長", "theme": "學校角色"}, {"id": 759, "w": "classmate", "pos": "名詞", "m": "同學", "theme": "學校角色"}, {"id": 760, "w": "friend", "pos": "名詞", "m": "朋友", "theme": "學校角色"}, {"id": 761, "w": "principal", "pos": "名詞", "m": "校長", "theme": "學校角色"}, {"id": 762, "w": "student", "pos": "名詞", "m": "學生", "theme": "學校角色"}, {"id": 763, "w": "teacher", "pos": "名詞", "m": "老師", "theme": "學校角色"}, {"id": 764, "w": "answer", "pos": "動詞", "m": "回答", "theme": "學習動詞與考試"}, {"id": 765, "w": "ask", "pos": "動詞", "m": "詢問", "theme": "學習動詞與考試"}, {"id": 766, "w": "behave", "pos": "動詞", "m": "守規矩", "theme": "學習動詞與考試"}, {"id": 767, "w": "explain", "pos": "動詞", "m": "解釋", "theme": "學習動詞與考試"}, {"id": 768, "w": "learn", "pos": "動詞", "m": "學習", "theme": "學習動詞與考試"}, {"id": 769, "w": "listen", "pos": "動詞", "m": "聆聽", "theme": "學習動詞與考試"}, {"id": 770, "w": "mark", "pos": "動詞", "m": "批改", "theme": "學習動詞與考試"}, {"id": 771, "w": "pass", "pos": "動詞", "m": "通過", "theme": "學習動詞與考試"}, {"id": 772, "w": "practice", "pos": "動詞", "m": "練習", "theme": "學習動詞與考試"}, {"id": 773, "w": "prepare", "pos": "動詞", "m": "準備", "theme": "學習動詞與考試"}, {"id": 774, "w": "pronounce", "pos": "動詞", "m": "發音", "theme": "學習動詞與考試"}, {"id": 775, "w": "punish", "pos": "動詞", "m": "懲罰", "theme": "學習動詞與考試"}, {"id": 776, "w": "read", "pos": "動詞", "m": "閱讀", "theme": "學習動詞與考試"}, {"id": 777, "w": "repeat", "pos": "動詞", "m": "重複", "theme": "學習動詞與考試"}, {"id": 778, "w": "review", "pos": "動詞", "m": "複習", "theme": "學習動詞與考試"}, {"id": 779, "w": "say", "pos": "動詞", "m": "說", "theme": "學習動詞與考試"}, {"id": 780, "w": "speak", "pos": "動詞", "m": "說話", "theme": "學習動詞與考試"}, {"id": 781, "w": "spell", "pos": "動詞", "m": "拼寫", "theme": "學習動詞與考試"}, {"id": 782, "w": "study", "pos": "動詞", "m": "研讀", "theme": "學習動詞與考試"}, {"id": 783, "w": "talk", "pos": "動詞", "m": "談話", "theme": "學習動詞與考試"}, {"id": 784, "w": "teach", "pos": "動詞", "m": "教學", "theme": "學習動詞與考試"}, {"id": 785, "w": "underline", "pos": "動詞", "m": "畫底線", "theme": "學習動詞與考試"}, {"id": 786, "w": "understand", "pos": "動詞", "m": "理解", "theme": "學習動詞與考試"}, {"id": 787, "w": "write", "pos": "動詞", "m": "書寫", "theme": "學習動詞與考試"}, {"id": 788, "w": "conversation", "pos": "名詞", "m": "對話", "theme": "學習動詞與考試"}, {"id": 789, "w": "draw", "pos": "動詞", "m": "畫畫", "theme": "學習動詞與考試"}, {"id": 790, "w": "exam", "pos": "名詞", "m": "考試", "theme": "學習動詞與考試"}, {"id": 791, "w": "example", "pos": "名詞", "m": "例子", "theme": "學習動詞與考試"}, {"id": 792, "w": "exercise", "pos": "名詞", "m": "練習", "theme": "學習動詞與考試"}, {"id": 793, "w": "final", "pos": "形容詞", "m": "最終的", "theme": "學習動詞與考試"}, {"id": 794, "w": "grade", "pos": "名詞", "m": "年級；成績", "theme": "學習動詞與考試"}, {"id": 795, "w": "homework", "pos": "名詞", "m": "家庭作業", "theme": "學習動詞與考試"}, {"id": 796, "w": "knowledge", "pos": "名詞", "m": "知識", "theme": "學習動詞與考試"}, {"id": 797, "w": "lesson", "pos": "名詞", "m": "課", "theme": "學習動詞與考試"}, {"id": 798, "w": "poem", "pos": "名詞", "m": "詩", "theme": "學習動詞與考試"}, {"id": 799, "w": "problem", "pos": "名詞", "m": "問題", "theme": "學習動詞與考試"}, {"id": 800, "w": "question", "pos": "名詞", "m": "問題", "theme": "學習動詞與考試"}, {"id": 801, "w": "quiz", "pos": "名詞", "m": "小考", "theme": "學習動詞與考試"}, {"id": 802, "w": "record", "pos": "名詞", "m": "紀錄", "theme": "學習動詞與考試"}, {"id": 803, "w": "score", "pos": "名詞", "m": "分數", "theme": "學習動詞與考試"}, {"id": 804, "w": "story", "pos": "名詞", "m": "故事", "theme": "學習動詞與考試"}, {"id": 805, "w": "test", "pos": "名詞", "m": "測驗", "theme": "學習動詞與考試"}, {"id": 806, "w": "vocabulary", "pos": "名詞", "m": "字彙", "theme": "學習動詞與考試"}, {"id": 807, "w": "semester", "pos": "名詞", "m": "學期", "theme": "學習動詞與考試"}, {"id": 808, "w": "position", "pos": "名詞", "m": "位置", "theme": "方位詞"}, {"id": 809, "w": "back", "pos": "形容詞", "m": "後面的", "theme": "方位詞"}, {"id": 810, "w": "backward", "pos": "副詞", "m": "向後", "theme": "方位詞"}, {"id": 811, "w": "forward", "pos": "副詞", "m": "向前", "theme": "方位詞"}, {"id": 812, "w": "front", "pos": "形容詞", "m": "前面的", "theme": "方位詞"}, {"id": 813, "w": "left", "pos": "形容詞", "m": "左邊的", "theme": "方位詞"}, {"id": 814, "w": "middle", "pos": "形容詞", "m": "中間的", "theme": "方位詞"}, {"id": 815, "w": "right", "pos": "形容詞", "m": "右邊的", "theme": "方位詞"}, {"id": 816, "w": "east", "pos": "形容詞", "m": "東方的", "theme": "方位詞"}, {"id": 817, "w": "west", "pos": "形容詞", "m": "西方的", "theme": "方位詞"}, {"id": 818, "w": "south", "pos": "形容詞", "m": "南方的", "theme": "方位詞"}, {"id": 819, "w": "north", "pos": "形容詞", "m": "北方的", "theme": "方位詞"}, {"id": 820, "w": "top", "pos": "形容詞", "m": "頂部的", "theme": "方位詞"}, {"id": 821, "w": "bakery", "pos": "名詞", "m": "麵包店", "theme": "地點場所"}, {"id": 822, "w": "bank", "pos": "名詞", "m": "銀行", "theme": "地點場所"}, {"id": 823, "w": "beach", "pos": "名詞", "m": "海灘", "theme": "地點場所"}, {"id": 824, "w": "bookstore", "pos": "名詞", "m": "書店", "theme": "地點場所"}, {"id": 825, "w": "buffet", "pos": "名詞", "m": "自助餐", "theme": "地點場所"}, {"id": 826, "w": "cafeteria", "pos": "名詞", "m": "自助餐廳", "theme": "地點場所"}, {"id": 827, "w": "church", "pos": "名詞", "m": "教堂", "theme": "地點場所"}, {"id": 828, "w": "convenience store", "pos": "名詞", "m": "便利商店", "theme": "地點場所"}, {"id": 829, "w": "culture center", "pos": "名詞", "m": "文化中心", "theme": "地點場所"}, {"id": 830, "w": "department store", "pos": "名詞", "m": "百貨公司", "theme": "地點場所"}, {"id": 831, "w": "drugstore", "pos": "名詞", "m": "藥局", "theme": "地點場所"}, {"id": 832, "w": "factory", "pos": "名詞", "m": "工廠", "theme": "地點場所"}, {"id": 833, "w": "fast food restaurant", "pos": "名詞", "m": "速食餐廳", "theme": "地點場所"}, {"id": 834, "w": "fire station", "pos": "名詞", "m": "消防局", "theme": "地點場所"}, {"id": 835, "w": "flower shop", "pos": "名詞", "m": "花店", "theme": "地點場所"}, {"id": 836, "w": "hospital", "pos": "名詞", "m": "醫院", "theme": "地點場所"}, {"id": 837, "w": "hotel", "pos": "名詞", "m": "飯店", "theme": "地點場所"}, {"id": 838, "w": "mall", "pos": "名詞", "m": "購物中心", "theme": "地點場所"}, {"id": 839, "w": "market", "pos": "名詞", "m": "市場", "theme": "地點場所"}, {"id": 840, "w": "men’s room", "pos": "名詞", "m": "男廁", "theme": "地點場所"}, {"id": 841, "w": "women’s room", "pos": "名詞", "m": "女廁", "theme": "地點場所"}, {"id": 842, "w": "movie theater", "pos": "名詞", "m": "電影院", "theme": "地點場所"}, {"id": 843, "w": "museum", "pos": "名詞", "m": "博物館", "theme": "地點場所"}, {"id": 844, "w": "office", "pos": "名詞", "m": "辦公室", "theme": "地點場所"}, {"id": 845, "w": "park", "pos": "名詞", "m": "公園", "theme": "地點場所"}, {"id": 846, "w": "pool", "pos": "名詞", "m": "游泳池", "theme": "地點場所"}, {"id": 847, "w": "post office", "pos": "名詞", "m": "郵局", "theme": "地點場所"}, {"id": 848, "w": "police station", "pos": "名詞", "m": "警察局", "theme": "地點場所"}, {"id": 849, "w": "restroom", "pos": "名詞", "m": "洗手間", "theme": "地點場所"}, {"id": 850, "w": "restaurant", "pos": "名詞", "m": "餐廳", "theme": "地點場所"}, {"id": 851, "w": "shop", "pos": "名詞", "m": "商店", "theme": "地點場所"}, {"id": 852, "w": "stationery store", "pos": "名詞", "m": "文具店", "theme": "地點場所"}, {"id": 853, "w": "store", "pos": "名詞", "m": "商店", "theme": "地點場所"}, {"id": 854, "w": "supermarket", "pos": "名詞", "m": "超市", "theme": "地點場所"}, {"id": 855, "w": "temple", "pos": "名詞", "m": "寺廟", "theme": "地點場所"}, {"id": 856, "w": "theater", "pos": "名詞", "m": "劇院", "theme": "地點場所"}, {"id": 857, "w": "waterfalls", "pos": "名詞", "m": "瀑布", "theme": "地點場所"}, {"id": 858, "w": "zoo", "pos": "名詞", "m": "動物園", "theme": "地點場所"}, {"id": 859, "w": "city", "pos": "名詞", "m": "城市", "theme": "地點場所"}, {"id": 860, "w": "country", "pos": "名詞", "m": "國家；鄉下", "theme": "地點場所"}, {"id": 861, "w": "downtown", "pos": "名詞", "m": "市中心", "theme": "地點場所"}, {"id": 862, "w": "farm", "pos": "名詞", "m": "農場", "theme": "地點場所"}, {"id": 863, "w": "place", "pos": "名詞", "m": "地方", "theme": "地點場所"}, {"id": 864, "w": "town", "pos": "名詞", "m": "城鎮", "theme": "地點場所"}, {"id": 865, "w": "village", "pos": "名詞", "m": "村莊", "theme": "地點場所"}, {"id": 866, "w": "local", "pos": "形容詞", "m": "當地的", "theme": "地點場所"}, {"id": 867, "w": "international", "pos": "形容詞", "m": "國際的", "theme": "地點場所"}, {"id": 868, "w": "airplane", "pos": "名詞", "m": "飛機", "theme": "交通工具與道路"}, {"id": 869, "w": "ambulance", "pos": "名詞", "m": "救護車", "theme": "交通工具與道路"}, {"id": 870, "w": "bicycle", "pos": "名詞", "m": "腳踏車", "theme": "交通工具與道路"}, {"id": 871, "w": "boat", "pos": "名詞", "m": "船", "theme": "交通工具與道路"}, {"id": 872, "w": "bus", "pos": "名詞", "m": "公車", "theme": "交通工具與道路"}, {"id": 873, "w": "car", "pos": "名詞", "m": "汽車", "theme": "交通工具與道路"}, {"id": 874, "w": "helicopter", "pos": "名詞", "m": "直升機", "theme": "交通工具與道路"}, {"id": 875, "w": "jeep", "pos": "名詞", "m": "吉普車", "theme": "交通工具與道路"}, {"id": 876, "w": "motorcycle", "pos": "名詞", "m": "摩托車", "theme": "交通工具與道路"}, {"id": 877, "w": "scooter", "pos": "名詞", "m": "速克達；小摩托車", "theme": "交通工具與道路"}, {"id": 878, "w": "ship", "pos": "名詞", "m": "船（大船）", "theme": "交通工具與道路"}, {"id": 879, "w": "tank", "pos": "名詞", "m": "坦克車", "theme": "交通工具與道路"}, {"id": 880, "w": "taxi", "pos": "名詞", "m": "計程車", "theme": "交通工具與道路"}, {"id": 881, "w": "train", "pos": "名詞", "m": "火車", "theme": "交通工具與道路"}, {"id": 882, "w": "truck", "pos": "名詞", "m": "卡車", "theme": "交通工具與道路"}, {"id": 883, "w": "airlines", "pos": "名詞", "m": "航空公司", "theme": "交通工具與道路"}, {"id": 884, "w": "airport", "pos": "名詞", "m": "機場", "theme": "交通工具與道路"}, {"id": 885, "w": "bus stop", "pos": "名詞", "m": "公車站", "theme": "交通工具與道路"}, {"id": 886, "w": "parking lot", "pos": "名詞", "m": "停車場", "theme": "交通工具與道路"}, {"id": 887, "w": "station", "pos": "名詞", "m": "車站", "theme": "交通工具與道路"}, {"id": 888, "w": "train station", "pos": "名詞", "m": "火車站", "theme": "交通工具與道路"}, {"id": 889, "w": "block", "pos": "名詞", "m": "街區", "theme": "交通工具與道路"}, {"id": 890, "w": "bridge", "pos": "名詞", "m": "橋樑", "theme": "交通工具與道路"}, {"id": 891, "w": "flat tire", "pos": "名詞", "m": "爆胎", "theme": "交通工具與道路"}, {"id": 892, "w": "highway", "pos": "名詞", "m": "高速公路", "theme": "交通工具與道路"}, {"id": 893, "w": "overpass", "pos": "名詞", "m": "天橋；陸橋", "theme": "交通工具與道路"}, {"id": 894, "w": "passenger", "pos": "名詞", "m": "乘客", "theme": "交通工具與道路"}, {"id": 895, "w": "path", "pos": "名詞", "m": "小徑", "theme": "交通工具與道路"}, {"id": 896, "w": "platform", "pos": "名詞", "m": "月台", "theme": "交通工具與道路"}, {"id": 897, "w": "railroad", "pos": "名詞", "m": "鐵路", "theme": "交通工具與道路"}, {"id": 898, "w": "railway", "pos": "名詞", "m": "鐵道", "theme": "交通工具與道路"}, {"id": 899, "w": "sidewalk", "pos": "名詞", "m": "人行道", "theme": "交通工具與道路"}, {"id": 900, "w": "subway", "pos": "名詞", "m": "地鐵", "theme": "交通工具與道路"}, {"id": 901, "w": "traffic", "pos": "名詞", "m": "交通", "theme": "交通工具與道路"}, {"id": 902, "w": "underpass", "pos": "名詞", "m": "地下道", "theme": "交通工具與道路"}, {"id": 903, "w": "wheel", "pos": "名詞", "m": "輪子", "theme": "交通工具與道路"}, {"id": 904, "w": "arrive", "pos": "動詞", "m": "到達", "theme": "交通動詞"}, {"id": 905, "w": "cross", "pos": "動詞", "m": "穿越", "theme": "交通動詞"}, {"id": 906, "w": "drive", "pos": "動詞", "m": "開車", "theme": "交通動詞"}, {"id": 907, "w": "fly", "pos": "動詞", "m": "飛行", "theme": "交通動詞"}, {"id": 908, "w": "land", "pos": "動詞", "m": "降落", "theme": "交通動詞"}, {"id": 909, "w": "ride", "pos": "動詞", "m": "騎乘；搭乘", "theme": "交通動詞"}, {"id": 910, "w": "sail", "pos": "動詞", "m": "航行", "theme": "交通動詞"}, {"id": 911, "w": "turn", "pos": "動詞", "m": "轉彎", "theme": "交通動詞"}, {"id": 912, "w": "fast", "pos": "形容詞", "m": "快的", "theme": "交通動詞"}, {"id": 913, "w": "slow", "pos": "形容詞", "m": "慢的", "theme": "交通動詞"}, {"id": 914, "w": "centimeter", "pos": "名詞", "m": "公分", "theme": "度量衡與形狀"}, {"id": 915, "w": "foot", "pos": "名詞", "m": "英尺", "theme": "度量衡與形狀"}, {"id": 916, "w": "gram", "pos": "名詞", "m": "公克", "theme": "度量衡與形狀"}, {"id": 917, "w": "inch", "pos": "名詞", "m": "英吋", "theme": "度量衡與形狀"}, {"id": 918, "w": "kilogram", "pos": "名詞", "m": "公斤", "theme": "度量衡與形狀"}, {"id": 919, "w": "kilometer", "pos": "名詞", "m": "公里", "theme": "度量衡與形狀"}, {"id": 920, "w": "liter", "pos": "名詞", "m": "公升", "theme": "度量衡與形狀"}, {"id": 921, "w": "meter", "pos": "名詞", "m": "公尺", "theme": "度量衡與形狀"}, {"id": 922, "w": "mile", "pos": "名詞", "m": "英里", "theme": "度量衡與形狀"}, {"id": 923, "w": "pound", "pos": "名詞", "m": "磅", "theme": "度量衡與形狀"}, {"id": 924, "w": "yard", "pos": "名詞", "m": "碼", "theme": "度量衡與形狀"}, {"id": 925, "w": "circle", "pos": "名詞", "m": "圓形", "theme": "度量衡與形狀"}, {"id": 926, "w": "dot", "pos": "名詞", "m": "點", "theme": "度量衡與形狀"}, {"id": 927, "w": "line", "pos": "名詞", "m": "線", "theme": "度量衡與形狀"}, {"id": 928, "w": "point", "pos": "名詞", "m": "點；尖端", "theme": "度量衡與形狀"}, {"id": 929, "w": "rectangle", "pos": "名詞", "m": "長方形", "theme": "度量衡與形狀"}, {"id": 930, "w": "row", "pos": "名詞", "m": "排；行", "theme": "度量衡與形狀"}, {"id": 931, "w": "shape", "pos": "名詞", "m": "形狀", "theme": "度量衡與形狀"}, {"id": 932, "w": "square", "pos": "名詞", "m": "正方形", "theme": "度量衡與形狀"}, {"id": 933, "w": "triangle", "pos": "名詞", "m": "三角形", "theme": "度量衡與形狀"}, {"id": 934, "w": "angle", "pos": "名詞", "m": "角度", "theme": "度量衡與形狀"}, {"id": 935, "w": "big", "pos": "形容詞", "m": "大的", "theme": "大小長短形容詞"}, {"id": 936, "w": "deep", "pos": "形容詞", "m": "深的", "theme": "大小長短形容詞"}, {"id": 937, "w": "distant", "pos": "形容詞", "m": "遙遠的", "theme": "大小長短形容詞"}, {"id": 938, "w": "extra", "pos": "形容詞", "m": "額外的", "theme": "大小長短形容詞"}, {"id": 939, "w": "far", "pos": "形容詞", "m": "遠的", "theme": "大小長短形容詞"}, {"id": 940, "w": "high", "pos": "形容詞", "m": "高的", "theme": "大小長短形容詞"}, {"id": 941, "w": "large", "pos": "形容詞", "m": "大的", "theme": "大小長短形容詞"}, {"id": 942, "w": "light", "pos": "形容詞", "m": "輕的", "theme": "大小長短形容詞"}, {"id": 943, "w": "little", "pos": "形容詞", "m": "小的", "theme": "大小長短形容詞"}, {"id": 944, "w": "long", "pos": "形容詞", "m": "長的", "theme": "大小長短形容詞"}, {"id": 945, "w": "low", "pos": "形容詞", "m": "低的", "theme": "大小長短形容詞"}, {"id": 946, "w": "maximum", "pos": "形容詞", "m": "最大的", "theme": "大小長短形容詞"}, {"id": 947, "w": "medium", "pos": "形容詞", "m": "中等的", "theme": "大小長短形容詞"}, {"id": 948, "w": "minus", "pos": "名詞", "m": "負號", "theme": "大小長短形容詞"}, {"id": 949, "w": "narrow", "pos": "形容詞", "m": "窄的", "theme": "大小長短形容詞"}, {"id": 950, "w": "plus", "pos": "名詞", "m": "加號", "theme": "大小長短形容詞"}, {"id": 951, "w": "short", "pos": "形容詞", "m": "短的；矮的", "theme": "大小長短形容詞"}, {"id": 952, "w": "small", "pos": "形容詞", "m": "小的", "theme": "大小長短形容詞"}, {"id": 953, "w": "straight", "pos": "形容詞", "m": "直的", "theme": "大小長短形容詞"}, {"id": 954, "w": "tiny", "pos": "形容詞", "m": "微小的", "theme": "大小長短形容詞"}, {"id": 955, "w": "wide", "pos": "形容詞", "m": "寬的", "theme": "大小長短形容詞"}, {"id": 956, "w": "round", "pos": "形容詞", "m": "圓形的", "theme": "大小長短形容詞"}, {"id": 957, "w": "bottle", "pos": "名詞", "m": "瓶", "theme": "容器與單位量詞"}, {"id": 958, "w": "cup", "pos": "名詞", "m": "杯", "theme": "容器與單位量詞"}, {"id": 959, "w": "dozen", "pos": "名詞", "m": "一打（十二個）", "theme": "容器與單位量詞"}, {"id": 960, "w": "glass", "pos": "名詞", "m": "玻璃杯", "theme": "容器與單位量詞"}, {"id": 961, "w": "loaf", "pos": "名詞", "m": "條（麵包）", "theme": "容器與單位量詞"}, {"id": 962, "w": "pack", "pos": "名詞", "m": "包", "theme": "容器與單位量詞"}, {"id": 963, "w": "package", "pos": "名詞", "m": "包裹", "theme": "容器與單位量詞"}, {"id": 964, "w": "pair", "pos": "名詞", "m": "一雙；一對", "theme": "容器與單位量詞"}, {"id": 965, "w": "piece", "pos": "名詞", "m": "片；塊；件", "theme": "容器與單位量詞"}, {"id": 966, "w": "size", "pos": "名詞", "m": "尺寸", "theme": "容器與單位量詞"}, {"id": 967, "w": "height", "pos": "名詞", "m": "高度", "theme": "容器與單位量詞"}, {"id": 968, "w": "distance", "pos": "名詞", "m": "距離", "theme": "容器與單位量詞"}, {"id": 969, "w": "weight", "pos": "名詞", "m": "重量", "theme": "容器與單位量詞"}, {"id": 970, "w": "amount", "pos": "名詞", "m": "數量", "theme": "容器與單位量詞"}, {"id": 971, "w": "measure", "pos": "動詞", "m": "測量", "theme": "容器與單位量詞"}, {"id": 972, "w": "Chinese New Year", "pos": "名詞", "m": "春節", "theme": "節慶與假期"}, {"id": 973, "w": "New Year’s Eve", "pos": "名詞", "m": "除夕", "theme": "節慶與假期"}, {"id": 974, "w": "Double Tenth Day", "pos": "名詞", "m": "雙十節", "theme": "節慶與假期"}, {"id": 975, "w": "Dragon-boat Festival", "pos": "名詞", "m": "端午節", "theme": "節慶與假期"}, {"id": 976, "w": "Lantern Festival", "pos": "名詞", "m": "元宵節", "theme": "節慶與假期"}, {"id": 977, "w": "Moon Festival", "pos": "名詞", "m": "中秋節", "theme": "節慶與假期"}, {"id": 978, "w": "Teacher’s Day", "pos": "名詞", "m": "教師節", "theme": "節慶與假期"}, {"id": 979, "w": "Christmas", "pos": "名詞", "m": "聖誕節", "theme": "節慶與假期"}, {"id": 980, "w": "Easter", "pos": "名詞", "m": "復活節", "theme": "節慶與假期"}, {"id": 981, "w": "Halloween", "pos": "名詞", "m": "萬聖節", "theme": "節慶與假期"}, {"id": 982, "w": "New Year’s Day", "pos": "名詞", "m": "元旦", "theme": "節慶與假期"}, {"id": 983, "w": "Mother’s Day", "pos": "名詞", "m": "母親節", "theme": "節慶與假期"}, {"id": 984, "w": "Father’s Day", "pos": "名詞", "m": "父親節", "theme": "節慶與假期"}, {"id": 985, "w": "Thanksgiving", "pos": "名詞", "m": "感恩節", "theme": "節慶與假期"}, {"id": 986, "w": "Valentine’s Day", "pos": "名詞", "m": "情人節", "theme": "節慶與假期"}, {"id": 987, "w": "culture", "pos": "名詞", "m": "文化", "theme": "節慶與假期"}, {"id": 988, "w": "custom", "pos": "名詞", "m": "習俗", "theme": "節慶與假期"}, {"id": 989, "w": "festival", "pos": "名詞", "m": "節慶", "theme": "節慶與假期"}, {"id": 990, "w": "holiday", "pos": "名詞", "m": "假日", "theme": "節慶與假期"}, {"id": 991, "w": "lantern", "pos": "名詞", "m": "燈籠", "theme": "節慶與假期"}, {"id": 992, "w": "vacation", "pos": "名詞", "m": "假期", "theme": "節慶與假期"}, {"id": 993, "w": "memory", "pos": "名詞", "m": "記憶；回憶", "theme": "節慶與假期"}, {"id": 994, "w": "celebrate", "pos": "動詞", "m": "慶祝", "theme": "節慶與假期"}, {"id": 995, "w": "actor", "pos": "名詞", "m": "男演員", "theme": "職業"}, {"id": 996, "w": "actress", "pos": "名詞", "m": "女演員", "theme": "職業"}, {"id": 997, "w": "artist", "pos": "名詞", "m": "藝術家", "theme": "職業"}, {"id": 998, "w": "assistant", "pos": "名詞", "m": "助理", "theme": "職業"}, {"id": 999, "w": "baby sitter", "pos": "名詞", "m": "保母", "theme": "職業"}, {"id": 1000, "w": "barber", "pos": "名詞", "m": "理髮師", "theme": "職業"}, {"id": 1001, "w": "boss", "pos": "名詞", "m": "老闆", "theme": "職業"}, {"id": 1002, "w": "businessman", "pos": "名詞", "m": "商人", "theme": "職業"}, {"id": 1003, "w": "clerk", "pos": "名詞", "m": "店員；職員", "theme": "職業"}, {"id": 1004, "w": "cook", "pos": "名詞", "m": "廚師", "theme": "職業"}, {"id": 1005, "w": "dentist", "pos": "名詞", "m": "牙醫", "theme": "職業"}, {"id": 1006, "w": "diplomat", "pos": "名詞", "m": "外交官", "theme": "職業"}, {"id": 1007, "w": "doctor", "pos": "名詞", "m": "醫生", "theme": "職業"}, {"id": 1008, "w": "driver", "pos": "名詞", "m": "司機", "theme": "職業"}, {"id": 1009, "w": "engineer", "pos": "名詞", "m": "工程師", "theme": "職業"}, {"id": 1010, "w": "farmer", "pos": "名詞", "m": "農夫", "theme": "職業"}, {"id": 1011, "w": "fisherman", "pos": "名詞", "m": "漁夫", "theme": "職業"}, {"id": 1012, "w": "guide", "pos": "名詞", "m": "導遊", "theme": "職業"}, {"id": 1013, "w": "hair dresser", "pos": "名詞", "m": "髮型師", "theme": "職業"}, {"id": 1014, "w": "housewife", "pos": "名詞", "m": "家庭主婦", "theme": "職業"}, {"id": 1015, "w": "hunter", "pos": "名詞", "m": "獵人", "theme": "職業"}, {"id": 1016, "w": "journalist", "pos": "名詞", "m": "記者", "theme": "職業"}, {"id": 1017, "w": "judge", "pos": "名詞", "m": "法官", "theme": "職業"}, {"id": 1018, "w": "lawyer", "pos": "名詞", "m": "律師", "theme": "職業"}, {"id": 1019, "w": "magician", "pos": "名詞", "m": "魔術師", "theme": "職業"}, {"id": 1020, "w": "mailman", "pos": "名詞", "m": "郵差", "theme": "職業"}, {"id": 1021, "w": "manager", "pos": "名詞", "m": "經理", "theme": "職業"}, {"id": 1022, "w": "mechanic", "pos": "名詞", "m": "技工", "theme": "職業"}, {"id": 1023, "w": "model", "pos": "名詞", "m": "模特兒", "theme": "職業"}, {"id": 1024, "w": "musician", "pos": "名詞", "m": "音樂家", "theme": "職業"}, {"id": 1025, "w": "nurse", "pos": "名詞", "m": "護士", "theme": "職業"}, {"id": 1026, "w": "painter", "pos": "名詞", "m": "畫家", "theme": "職業"}, {"id": 1027, "w": "police officer", "pos": "名詞", "m": "警察", "theme": "職業"}, {"id": 1028, "w": "president", "pos": "名詞", "m": "總統", "theme": "職業"}, {"id": 1029, "w": "priest", "pos": "名詞", "m": "神父", "theme": "職業"}, {"id": 1030, "w": "reporter", "pos": "名詞", "m": "記者", "theme": "職業"}, {"id": 1031, "w": "sailor", "pos": "名詞", "m": "水手", "theme": "職業"}, {"id": 1032, "w": "salesman", "pos": "名詞", "m": "銷售員", "theme": "職業"}, {"id": 1033, "w": "scientist", "pos": "名詞", "m": "科學家", "theme": "職業"}, {"id": 1034, "w": "secretary", "pos": "名詞", "m": "秘書", "theme": "職業"}, {"id": 1035, "w": "servant", "pos": "名詞", "m": "僕人", "theme": "職業"}, {"id": 1036, "w": "shopkeeper", "pos": "名詞", "m": "店主", "theme": "職業"}, {"id": 1037, "w": "singer", "pos": "名詞", "m": "歌手", "theme": "職業"}, {"id": 1038, "w": "soldier", "pos": "名詞", "m": "士兵", "theme": "職業"}, {"id": 1039, "w": "waiter", "pos": "名詞", "m": "服務生（男性）", "theme": "職業"}, {"id": 1040, "w": "waitress", "pos": "名詞", "m": "服務生（女性）", "theme": "職業"}, {"id": 1041, "w": "writer", "pos": "名詞", "m": "作家", "theme": "職業"}, {"id": 1042, "w": "vendor", "pos": "名詞", "m": "小販", "theme": "職業"}, {"id": 1043, "w": "business", "pos": "名詞", "m": "商業；生意", "theme": "職業"}, {"id": 1044, "w": "company", "pos": "名詞", "m": "公司", "theme": "職業"}, {"id": 1045, "w": "employ", "pos": "動詞", "m": "雇用", "theme": "職業"}, {"id": 1046, "w": "hire", "pos": "動詞", "m": "雇用", "theme": "職業"}, {"id": 1047, "w": "weather", "pos": "名詞", "m": "天氣", "theme": "天氣現象"}, {"id": 1048, "w": "clear", "pos": "形容詞", "m": "晴朗的", "theme": "天氣現象"}, {"id": 1049, "w": "cloudy", "pos": "形容詞", "m": "多雲的", "theme": "天氣現象"}, {"id": 1050, "w": "cold", "pos": "形容詞", "m": "寒冷的", "theme": "天氣現象"}, {"id": 1051, "w": "cool", "pos": "形容詞", "m": "涼爽的", "theme": "天氣現象"}, {"id": 1052, "w": "dry", "pos": "形容詞", "m": "乾燥的", "theme": "天氣現象"}, {"id": 1053, "w": "foggy", "pos": "形容詞", "m": "有霧的", "theme": "天氣現象"}, {"id": 1054, "w": "freezing", "pos": "形容詞", "m": "極冷的", "theme": "天氣現象"}, {"id": 1055, "w": "hot", "pos": "形容詞", "m": "炎熱的", "theme": "天氣現象"}, {"id": 1056, "w": "humid", "pos": "形容詞", "m": "潮濕的", "theme": "天氣現象"}, {"id": 1057, "w": "rainy", "pos": "形容詞", "m": "下雨的", "theme": "天氣現象"}, {"id": 1058, "w": "snowy", "pos": "形容詞", "m": "下雪的", "theme": "天氣現象"}, {"id": 1059, "w": "stormy", "pos": "形容詞", "m": "暴風雨的", "theme": "天氣現象"}, {"id": 1060, "w": "sunny", "pos": "形容詞", "m": "陽光充足的", "theme": "天氣現象"}, {"id": 1061, "w": "warm", "pos": "形容詞", "m": "溫暖的", "theme": "天氣現象"}, {"id": 1062, "w": "wet", "pos": "形容詞", "m": "潮濕的", "theme": "天氣現象"}, {"id": 1063, "w": "windy", "pos": "形容詞", "m": "多風的", "theme": "天氣現象"}, {"id": 1064, "w": "fog", "pos": "名詞", "m": "霧", "theme": "天氣現象"}, {"id": 1065, "w": "lightning", "pos": "名詞", "m": "閃電", "theme": "天氣現象"}, {"id": 1066, "w": "rainbow", "pos": "名詞", "m": "彩虹", "theme": "天氣現象"}, {"id": 1067, "w": "shower", "pos": "名詞", "m": "陣雨", "theme": "天氣現象"}, {"id": 1068, "w": "snow", "pos": "名詞", "m": "雪", "theme": "天氣現象"}, {"id": 1069, "w": "storm", "pos": "名詞", "m": "暴風雨", "theme": "天氣現象"}, {"id": 1070, "w": "thunder", "pos": "名詞", "m": "雷聲", "theme": "天氣現象"}, {"id": 1071, "w": "typhoon", "pos": "名詞", "m": "颱風", "theme": "天氣現象"}, {"id": 1072, "w": "wind", "pos": "名詞", "m": "風", "theme": "天氣現象"}, {"id": 1073, "w": "blow", "pos": "動詞", "m": "吹", "theme": "天氣現象"}, {"id": 1074, "w": "rain", "pos": "動詞", "m": "下雨", "theme": "天氣現象"}, {"id": 1075, "w": "shine", "pos": "動詞", "m": "照耀", "theme": "天氣現象"}, {"id": 1076, "w": "nature", "pos": "名詞", "m": "大自然", "theme": "自然與地理"}, {"id": 1077, "w": "natural", "pos": "形容詞", "m": "自然的", "theme": "自然與地理"}, {"id": 1078, "w": "air", "pos": "名詞", "m": "空氣", "theme": "自然與地理"}, {"id": 1079, "w": "climate", "pos": "名詞", "m": "氣候", "theme": "自然與地理"}, {"id": 1080, "w": "cloud", "pos": "名詞", "m": "雲", "theme": "自然與地理"}, {"id": 1081, "w": "degree", "pos": "名詞", "m": "度數", "theme": "自然與地理"}, {"id": 1082, "w": "earth", "pos": "名詞", "m": "地球", "theme": "自然與地理"}, {"id": 1083, "w": "earthquake", "pos": "名詞", "m": "地震", "theme": "自然與地理"}, {"id": 1084, "w": "moon", "pos": "名詞", "m": "月亮", "theme": "自然與地理"}, {"id": 1085, "w": "sky", "pos": "名詞", "m": "天空", "theme": "自然與地理"}, {"id": 1086, "w": "sun", "pos": "名詞", "m": "太陽", "theme": "自然與地理"}, {"id": 1087, "w": "star", "pos": "名詞", "m": "星星", "theme": "自然與地理"}, {"id": 1088, "w": "temperature", "pos": "名詞", "m": "溫度", "theme": "自然與地理"}, {"id": 1089, "w": "area", "pos": "名詞", "m": "區域", "theme": "自然與地理"}, {"id": 1090, "w": "bank", "pos": "名詞", "m": "河岸", "theme": "自然與地理"}, {"id": 1091, "w": "beach", "pos": "名詞", "m": "海灘", "theme": "自然與地理"}, {"id": 1092, "w": "coast", "pos": "名詞", "m": "海岸", "theme": "自然與地理"}, {"id": 1093, "w": "desert", "pos": "名詞", "m": "沙漠", "theme": "自然與地理"}, {"id": 1094, "w": "environment", "pos": "名詞", "m": "環境", "theme": "自然與地理"}, {"id": 1095, "w": "forest", "pos": "名詞", "m": "森林", "theme": "自然與地理"}, {"id": 1096, "w": "hill", "pos": "名詞", "m": "山丘", "theme": "自然與地理"}, {"id": 1097, "w": "island", "pos": "名詞", "m": "島嶼", "theme": "自然與地理"}, {"id": 1098, "w": "lake", "pos": "名詞", "m": "湖泊", "theme": "自然與地理"}, {"id": 1099, "w": "mountain", "pos": "名詞", "m": "山", "theme": "自然與地理"}, {"id": 1100, "w": "ocean", "pos": "名詞", "m": "海洋", "theme": "自然與地理"}, {"id": 1101, "w": "plain", "pos": "名詞", "m": "平原", "theme": "自然與地理"}, {"id": 1102, "w": "pond", "pos": "名詞", "m": "池塘", "theme": "自然與地理"}, {"id": 1103, "w": "pool", "pos": "名詞", "m": "水池", "theme": "自然與地理"}, {"id": 1104, "w": "river", "pos": "名詞", "m": "河流", "theme": "自然與地理"}, {"id": 1105, "w": "sea", "pos": "名詞", "m": "海", "theme": "自然與地理"}, {"id": 1106, "w": "spring", "pos": "名詞", "m": "泉水", "theme": "自然與地理"}, {"id": 1107, "w": "stream", "pos": "名詞", "m": "溪流", "theme": "自然與地理"}, {"id": 1108, "w": "valley", "pos": "名詞", "m": "山谷", "theme": "自然與地理"}, {"id": 1109, "w": "woods", "pos": "名詞", "m": "樹林", "theme": "自然與地理"}, {"id": 1110, "w": "animal", "pos": "名詞", "m": "動物", "theme": "動物（哺乳類等）"}, {"id": 1111, "w": "bear", "pos": "名詞", "m": "熊", "theme": "動物（哺乳類等）"}, {"id": 1112, "w": "cat", "pos": "名詞", "m": "貓", "theme": "動物（哺乳類等）"}, {"id": 1113, "w": "chicken", "pos": "名詞", "m": "雞", "theme": "動物（哺乳類等）"}, {"id": 1114, "w": "cow", "pos": "名詞", "m": "牛", "theme": "動物（哺乳類等）"}, {"id": 1115, "w": "deer", "pos": "名詞", "m": "鹿", "theme": "動物（哺乳類等）"}, {"id": 1116, "w": "dinosaur", "pos": "名詞", "m": "恐龍", "theme": "動物（哺乳類等）"}, {"id": 1117, "w": "dog", "pos": "名詞", "m": "狗", "theme": "動物（哺乳類等）"}, {"id": 1118, "w": "donkey", "pos": "名詞", "m": "驢", "theme": "動物（哺乳類等）"}, {"id": 1119, "w": "duck", "pos": "名詞", "m": "鴨", "theme": "動物（哺乳類等）"}, {"id": 1120, "w": "eagle", "pos": "名詞", "m": "老鷹", "theme": "動物（哺乳類等）"}, {"id": 1121, "w": "elephant", "pos": "名詞", "m": "大象", "theme": "動物（哺乳類等）"}, {"id": 1122, "w": "fox", "pos": "名詞", "m": "狐狸", "theme": "動物（哺乳類等）"}, {"id": 1123, "w": "frog", "pos": "名詞", "m": "青蛙", "theme": "動物（哺乳類等）"}, {"id": 1124, "w": "goat", "pos": "名詞", "m": "山羊", "theme": "動物（哺乳類等）"}, {"id": 1125, "w": "goose", "pos": "名詞", "m": "鵝", "theme": "動物（哺乳類等）"}, {"id": 1126, "w": "hen", "pos": "名詞", "m": "母雞", "theme": "動物（哺乳類等）"}, {"id": 1127, "w": "hippo", "pos": "名詞", "m": "河馬", "theme": "動物（哺乳類等）"}, {"id": 1128, "w": "horse", "pos": "名詞", "m": "馬", "theme": "動物（哺乳類等）"}, {"id": 1129, "w": "kangaroo", "pos": "名詞", "m": "袋鼠", "theme": "動物（哺乳類等）"}, {"id": 1130, "w": "kitten", "pos": "名詞", "m": "小貓", "theme": "動物（哺乳類等）"}, {"id": 1131, "w": "koala", "pos": "名詞", "m": "無尾熊", "theme": "動物（哺乳類等）"}, {"id": 1132, "w": "lamb", "pos": "名詞", "m": "小羊", "theme": "動物（哺乳類等）"}, {"id": 1133, "w": "lion", "pos": "名詞", "m": "獅子", "theme": "動物（哺乳類等）"}, {"id": 1134, "w": "monkey", "pos": "名詞", "m": "猴子", "theme": "動物（哺乳類等）"}, {"id": 1135, "w": "monster", "pos": "名詞", "m": "怪物", "theme": "動物（哺乳類等）"}, {"id": 1136, "w": "mouse", "pos": "名詞", "m": "老鼠", "theme": "動物（哺乳類等）"}, {"id": 1137, "w": "ox", "pos": "名詞", "m": "公牛", "theme": "動物（哺乳類等）"}, {"id": 1138, "w": "panda", "pos": "名詞", "m": "熊貓", "theme": "動物（哺乳類等）"}, {"id": 1139, "w": "parrot", "pos": "名詞", "m": "鸚鵡", "theme": "動物（哺乳類等）"}, {"id": 1140, "w": "pet", "pos": "名詞", "m": "寵物", "theme": "動物（哺乳類等）"}, {"id": 1141, "w": "pig", "pos": "名詞", "m": "豬", "theme": "動物（哺乳類等）"}, {"id": 1142, "w": "pigeon", "pos": "名詞", "m": "鴿子", "theme": "動物（哺乳類等）"}, {"id": 1143, "w": "puppy", "pos": "名詞", "m": "小狗", "theme": "動物（哺乳類等）"}, {"id": 1144, "w": "rabbit", "pos": "名詞", "m": "兔子", "theme": "動物（哺乳類等）"}, {"id": 1145, "w": "rat", "pos": "名詞", "m": "大鼠", "theme": "動物（哺乳類等）"}, {"id": 1146, "w": "sheep", "pos": "名詞", "m": "綿羊", "theme": "動物（哺乳類等）"}, {"id": 1147, "w": "swan", "pos": "名詞", "m": "天鵝", "theme": "動物（哺乳類等）"}, {"id": 1148, "w": "tiger", "pos": "名詞", "m": "老虎", "theme": "動物（哺乳類等）"}, {"id": 1149, "w": "turkey", "pos": "名詞", "m": "火雞", "theme": "動物（哺乳類等）"}, {"id": 1150, "w": "wolf", "pos": "名詞", "m": "狼", "theme": "動物（哺乳類等）"}, {"id": 1151, "w": "zebra", "pos": "名詞", "m": "斑馬", "theme": "動物（哺乳類等）"}, {"id": 1152, "w": "insect", "pos": "名詞", "m": "昆蟲", "theme": "昆蟲與海洋生物"}, {"id": 1153, "w": "ant", "pos": "名詞", "m": "螞蟻", "theme": "昆蟲與海洋生物"}, {"id": 1154, "w": "bat", "pos": "名詞", "m": "蝙蝠", "theme": "昆蟲與海洋生物"}, {"id": 1155, "w": "bee", "pos": "名詞", "m": "蜜蜂", "theme": "昆蟲與海洋生物"}, {"id": 1156, "w": "bird", "pos": "名詞", "m": "鳥", "theme": "昆蟲與海洋生物"}, {"id": 1157, "w": "bug", "pos": "名詞", "m": "小蟲", "theme": "昆蟲與海洋生物"}, {"id": 1158, "w": "butterfly", "pos": "名詞", "m": "蝴蝶", "theme": "昆蟲與海洋生物"}, {"id": 1159, "w": "cockroach", "pos": "名詞", "m": "蟑螂", "theme": "昆蟲與海洋生物"}, {"id": 1160, "w": "dragon", "pos": "名詞", "m": "龍", "theme": "昆蟲與海洋生物"}, {"id": 1161, "w": "mosquito", "pos": "名詞", "m": "蚊子", "theme": "昆蟲與海洋生物"}, {"id": 1162, "w": "snail", "pos": "名詞", "m": "蝸牛", "theme": "昆蟲與海洋生物"}, {"id": 1163, "w": "snake", "pos": "名詞", "m": "蛇", "theme": "昆蟲與海洋生物"}, {"id": 1164, "w": "spider", "pos": "名詞", "m": "蜘蛛", "theme": "昆蟲與海洋生物"}, {"id": 1165, "w": "worm", "pos": "名詞", "m": "蠕蟲", "theme": "昆蟲與海洋生物"}, {"id": 1166, "w": "crab", "pos": "名詞", "m": "螃蟹", "theme": "昆蟲與海洋生物"}, {"id": 1167, "w": "dolphin", "pos": "名詞", "m": "海豚", "theme": "昆蟲與海洋生物"}, {"id": 1168, "w": "fish", "pos": "名詞", "m": "魚", "theme": "昆蟲與海洋生物"}, {"id": 1169, "w": "shark", "pos": "名詞", "m": "鯊魚", "theme": "昆蟲與海洋生物"}, {"id": 1170, "w": "shrimp", "pos": "名詞", "m": "蝦", "theme": "昆蟲與海洋生物"}, {"id": 1171, "w": "turtle", "pos": "名詞", "m": "烏龜", "theme": "昆蟲與海洋生物"}, {"id": 1172, "w": "whale", "pos": "名詞", "m": "鯨魚", "theme": "昆蟲與海洋生物"}, {"id": 1173, "w": "bark", "pos": "動詞", "m": "吠叫", "theme": "昆蟲與海洋生物"}, {"id": 1174, "w": "bite", "pos": "動詞", "m": "咬", "theme": "昆蟲與海洋生物"}, {"id": 1175, "w": "swallow", "pos": "動詞", "m": "吞嚥", "theme": "昆蟲與海洋生物"}, {"id": 1176, "w": "tail", "pos": "名詞", "m": "尾巴", "theme": "昆蟲與海洋生物"}, {"id": 1177, "w": "wing", "pos": "名詞", "m": "翅膀", "theme": "昆蟲與海洋生物"}, {"id": 1178, "w": "this", "pos": "限定詞", "m": "這個（近指單數）", "theme": "代名詞與所有格"}, {"id": 1179, "w": "that", "pos": "限定詞", "m": "那個（遠指單數）", "theme": "代名詞與所有格"}, {"id": 1180, "w": "these", "pos": "限定詞", "m": "這些（近指複數）", "theme": "代名詞與所有格"}, {"id": 1181, "w": "those", "pos": "限定詞", "m": "那些（遠指複數）", "theme": "代名詞與所有格"}, {"id": 1182, "w": "my", "pos": "所有格", "m": "我的", "theme": "代名詞與所有格"}, {"id": 1183, "w": "our", "pos": "所有格", "m": "我們的", "theme": "代名詞與所有格"}, {"id": 1184, "w": "your", "pos": "所有格", "m": "你的；你們的", "theme": "代名詞與所有格"}, {"id": 1185, "w": "his", "pos": "所有格", "m": "他的", "theme": "代名詞與所有格"}, {"id": 1186, "w": "her", "pos": "所有格", "m": "她的", "theme": "代名詞與所有格"}, {"id": 1187, "w": "its", "pos": "所有格", "m": "它的", "theme": "代名詞與所有格"}, {"id": 1188, "w": "their", "pos": "所有格", "m": "他們的", "theme": "代名詞與所有格"}, {"id": 1189, "w": "I", "pos": "代名詞", "m": "我 (主格)", "theme": "代名詞與所有格"}, {"id": 1190, "w": "me", "pos": "代名詞", "m": "我 (受格)", "theme": "代名詞與所有格"}, {"id": 1191, "w": "my", "pos": "所有格", "m": "我的", "theme": "代名詞與所有格"}, {"id": 1192, "w": "mine", "pos": "代名詞", "m": "我的", "theme": "代名詞與所有格"}, {"id": 1193, "w": "myself", "pos": "代名詞", "m": "我自己", "theme": "代名詞與所有格"}, {"id": 1194, "w": "you", "pos": "代名詞", "m": "你；你們 (主/受格)", "theme": "代名詞與所有格"}, {"id": 1195, "w": "your", "pos": "所有格", "m": "你的；你們的", "theme": "代名詞與所有格"}, {"id": 1196, "w": "yours", "pos": "代名詞", "m": "你的；你們的", "theme": "代名詞與所有格"}, {"id": 1197, "w": "yourself", "pos": "代名詞", "m": "你自己", "theme": "代名詞與所有格"}, {"id": 1198, "w": "yourselves", "pos": "代名詞", "m": "你們自己", "theme": "代名詞與所有格"}, {"id": 1199, "w": "he", "pos": "代名詞", "m": "他 (主格)", "theme": "代名詞與所有格"}, {"id": 1200, "w": "him", "pos": "代名詞", "m": "他 (受格)", "theme": "代名詞與所有格"}, {"id": 1201, "w": "his", "pos": "代名詞", "m": "他的", "theme": "代名詞與所有格"}, {"id": 1202, "w": "himself", "pos": "代名詞", "m": "他自己", "theme": "代名詞與所有格"}, {"id": 1203, "w": "she", "pos": "代名詞", "m": "她 (主格)", "theme": "代名詞與所有格"}, {"id": 1204, "w": "her", "pos": "代名詞", "m": "她的 (受格)", "theme": "代名詞與所有格"}, {"id": 1205, "w": "hers", "pos": "代名詞", "m": "她的", "theme": "代名詞與所有格"}, {"id": 1206, "w": "herself", "pos": "代名詞", "m": "她自己", "theme": "代名詞與所有格"}, {"id": 1207, "w": "it", "pos": "代名詞", "m": "它 (主/受格)", "theme": "代名詞與所有格"}, {"id": 1208, "w": "its", "pos": "所有格", "m": "它的", "theme": "代名詞與所有格"}, {"id": 1209, "w": "itself", "pos": "代名詞", "m": "它自己", "theme": "代名詞與所有格"}, {"id": 1210, "w": "we", "pos": "代名詞", "m": "我們 (主格)", "theme": "代名詞與所有格"}, {"id": 1211, "w": "us", "pos": "代名詞", "m": "我們 (受格)", "theme": "代名詞與所有格"}, {"id": 1212, "w": "our", "pos": "所有格", "m": "我們的", "theme": "代名詞與所有格"}, {"id": 1213, "w": "ours", "pos": "代名詞", "m": "我們的", "theme": "代名詞與所有格"}, {"id": 1214, "w": "ourselves", "pos": "代名詞", "m": "我們自己", "theme": "代名詞與所有格"}, {"id": 1215, "w": "they", "pos": "代名詞", "m": "他們；它們 (主格)", "theme": "代名詞與所有格"}, {"id": 1216, "w": "them", "pos": "代名詞", "m": "他們；它們 (受格)", "theme": "代名詞與所有格"}, {"id": 1217, "w": "their", "pos": "所有格", "m": "他們的；它們的", "theme": "代名詞與所有格"}, {"id": 1218, "w": "theirs", "pos": "代名詞", "m": "他們的；它們的", "theme": "代名詞與所有格"}, {"id": 1219, "w": "themselves", "pos": "代名詞", "m": "他們自己；它們自己", "theme": "代名詞與所有格"}, {"id": 1220, "w": "all", "pos": "代名詞", "m": "全部；所有", "theme": "不定代名詞與疑問詞"}, {"id": 1221, "w": "another", "pos": "代名詞", "m": "另一個", "theme": "不定代名詞與疑問詞"}, {"id": 1222, "w": "any", "pos": "代名詞", "m": "任何", "theme": "不定代名詞與疑問詞"}, {"id": 1223, "w": "anyone", "pos": "代名詞", "m": "任何人", "theme": "不定代名詞與疑問詞"}, {"id": 1224, "w": "anything", "pos": "代名詞", "m": "任何事", "theme": "不定代名詞與疑問詞"}, {"id": 1225, "w": "both", "pos": "代名詞", "m": "兩者", "theme": "不定代名詞與疑問詞"}, {"id": 1226, "w": "each", "pos": "代名詞", "m": "每個", "theme": "不定代名詞與疑問詞"}, {"id": 1227, "w": "everyone", "pos": "代名詞", "m": "每個人", "theme": "不定代名詞與疑問詞"}, {"id": 1228, "w": "everything", "pos": "代名詞", "m": "每件事", "theme": "不定代名詞與疑問詞"}, {"id": 1229, "w": "many", "pos": "代名詞", "m": "許多（可數）", "theme": "不定代名詞與疑問詞"}, {"id": 1230, "w": "nobody", "pos": "代名詞", "m": "沒有人", "theme": "不定代名詞與疑問詞"}, {"id": 1231, "w": "nothing", "pos": "代名詞", "m": "沒有東西", "theme": "不定代名詞與疑問詞"}, {"id": 1232, "w": "part", "pos": "名詞", "m": "部分", "theme": "不定代名詞與疑問詞"}, {"id": 1233, "w": "some", "pos": "代名詞", "m": "一些", "theme": "不定代名詞與疑問詞"}, {"id": 1234, "w": "someone", "pos": "代名詞", "m": "某人", "theme": "不定代名詞與疑問詞"}, {"id": 1235, "w": "something", "pos": "代名詞", "m": "某事", "theme": "不定代名詞與疑問詞"}, {"id": 1236, "w": "how", "pos": "疑問詞", "m": "如何", "theme": "不定代名詞與疑問詞"}, {"id": 1237, "w": "what", "pos": "疑問詞", "m": "什麼", "theme": "不定代名詞與疑問詞"}, {"id": 1238, "w": "which", "pos": "疑問詞", "m": "哪一個", "theme": "不定代名詞與疑問詞"}, {"id": 1239, "w": "who", "pos": "疑問詞", "m": "誰", "theme": "不定代名詞與疑問詞"}, {"id": 1240, "w": "whose", "pos": "疑問詞", "m": "誰的", "theme": "不定代名詞與疑問詞"}, {"id": 1241, "w": "when", "pos": "疑問詞", "m": "何時", "theme": "不定代名詞與疑問詞"}, {"id": 1242, "w": "where", "pos": "疑問詞", "m": "在哪裡", "theme": "不定代名詞與疑問詞"}, {"id": 1243, "w": "whether", "pos": "連接詞", "m": "是否", "theme": "不定代名詞與疑問詞"}, {"id": 1244, "w": "while", "pos": "連接詞", "m": "當…時；然而", "theme": "不定代名詞與疑問詞"}, {"id": 1245, "w": "why", "pos": "疑問詞", "m": "為什麼", "theme": "不定代名詞與疑問詞"}, {"id": 1246, "w": "about", "pos": "介系詞", "m": "關於；大約", "theme": "介系詞與連接詞"}, {"id": 1247, "w": "above", "pos": "介系詞", "m": "在…上面", "theme": "介系詞與連接詞"}, {"id": 1248, "w": "across", "pos": "介系詞", "m": "橫越", "theme": "介系詞與連接詞"}, {"id": 1249, "w": "after", "pos": "介系詞", "m": "在…之後", "theme": "介系詞與連接詞"}, {"id": 1250, "w": "against", "pos": "介系詞", "m": "反對；靠著", "theme": "介系詞與連接詞"}, {"id": 1251, "w": "along", "pos": "介系詞", "m": "沿著", "theme": "介系詞與連接詞"}, {"id": 1252, "w": "among", "pos": "介系詞", "m": "在…之中（三者以上）", "theme": "介系詞與連接詞"}, {"id": 1253, "w": "at", "pos": "介系詞", "m": "在（地點、時間點）", "theme": "介系詞與連接詞"}, {"id": 1254, "w": "before", "pos": "介系詞", "m": "在…之前", "theme": "介系詞與連接詞"}, {"id": 1255, "w": "behind", "pos": "介系詞", "m": "在…後面", "theme": "介系詞與連接詞"}, {"id": 1256, "w": "below", "pos": "介系詞", "m": "在…下面", "theme": "介系詞與連接詞"}, {"id": 1257, "w": "beside", "pos": "介系詞", "m": "在…旁邊", "theme": "介系詞與連接詞"}, {"id": 1258, "w": "between", "pos": "介系詞", "m": "在…之間（兩者）", "theme": "介系詞與連接詞"}, {"id": 1259, "w": "beyond", "pos": "介系詞", "m": "超越；在…另一邊", "theme": "介系詞與連接詞"}, {"id": 1260, "w": "by", "pos": "介系詞", "m": "藉由；在…旁邊", "theme": "介系詞與連接詞"}, {"id": 1261, "w": "down", "pos": "介系詞", "m": "沿…而下", "theme": "介系詞與連接詞"}, {"id": 1262, "w": "during", "pos": "介系詞", "m": "在…期間", "theme": "介系詞與連接詞"}, {"id": 1263, "w": "except", "pos": "介系詞", "m": "除了…之外", "theme": "介系詞與連接詞"}, {"id": 1264, "w": "for", "pos": "介系詞", "m": "為了；給；因為", "theme": "介系詞與連接詞"}, {"id": 1265, "w": "from", "pos": "介系詞", "m": "從…；來自…", "theme": "介系詞與連接詞"}, {"id": 1266, "w": "in", "pos": "介系詞", "m": "在…裡面（較大範圍）", "theme": "介系詞與連接詞"}, {"id": 1267, "w": "in back of", "pos": "介系詞", "m": "在…後面", "theme": "介系詞與連接詞"}, {"id": 1268, "w": "in front of", "pos": "介系詞", "m": "在…前面", "theme": "介系詞與連接詞"}, {"id": 1269, "w": "inside", "pos": "介系詞", "m": "在…裡面", "theme": "介系詞與連接詞"}, {"id": 1270, "w": "into", "pos": "介系詞", "m": "進入", "theme": "介系詞與連接詞"}, {"id": 1271, "w": "like", "pos": "介系詞", "m": "像…", "theme": "介系詞與連接詞"}, {"id": 1272, "w": "near", "pos": "介系詞", "m": "靠近", "theme": "介系詞與連接詞"}, {"id": 1273, "w": "of", "pos": "介系詞", "m": "…的；關於", "theme": "介系詞與連接詞"}, {"id": 1274, "w": "off", "pos": "介系詞", "m": "離開；從…下來", "theme": "介系詞與連接詞"}, {"id": 1275, "w": "on", "pos": "介系詞", "m": "在…上面（接觸）", "theme": "介系詞與連接詞"}, {"id": 1276, "w": "out of", "pos": "介系詞", "m": "從…裡面出來", "theme": "介系詞與連接詞"}, {"id": 1277, "w": "outside", "pos": "介系詞", "m": "在…外面", "theme": "介系詞與連接詞"}, {"id": 1278, "w": "over", "pos": "介系詞", "m": "在…正上方；越過", "theme": "介系詞與連接詞"}, {"id": 1279, "w": "next to", "pos": "介系詞", "m": "緊鄰；在…旁邊", "theme": "介系詞與連接詞"}, {"id": 1280, "w": "since", "pos": "介系詞", "m": "自從…", "theme": "介系詞與連接詞"}, {"id": 1281, "w": "than", "pos": "介系詞", "m": "比…", "theme": "介系詞與連接詞"}, {"id": 1282, "w": "through", "pos": "介系詞", "m": "穿過；透過", "theme": "介系詞與連接詞"}, {"id": 1283, "w": "to", "pos": "介系詞", "m": "到…；向…", "theme": "介系詞與連接詞"}, {"id": 1284, "w": "toward", "pos": "介系詞", "m": "朝向…", "theme": "介系詞與連接詞"}, {"id": 1285, "w": "under", "pos": "介系詞", "m": "在…下面", "theme": "介系詞與連接詞"}, {"id": 1286, "w": "until", "pos": "介系詞", "m": "直到…", "theme": "介系詞與連接詞"}, {"id": 1287, "w": "up", "pos": "介系詞", "m": "沿…而上", "theme": "介系詞與連接詞"}, {"id": 1288, "w": "with", "pos": "介系詞", "m": "和…一起；用…", "theme": "介系詞與連接詞"}, {"id": 1289, "w": "without", "pos": "介系詞", "m": "沒有…", "theme": "介系詞與連接詞"}, {"id": 1290, "w": "and", "pos": "連接詞", "m": "和；並且", "theme": "介系詞與連接詞"}, {"id": 1291, "w": "because", "pos": "連接詞", "m": "因為", "theme": "介系詞與連接詞"}, {"id": 1292, "w": "besides", "pos": "副詞", "m": "此外；而且", "theme": "介系詞與連接詞"}, {"id": 1293, "w": "but", "pos": "連接詞", "m": "但是", "theme": "介系詞與連接詞"}, {"id": 1294, "w": "however", "pos": "副詞", "m": "然而", "theme": "介系詞與連接詞"}, {"id": 1295, "w": "if", "pos": "連接詞", "m": "如果", "theme": "介系詞與連接詞"}, {"id": 1296, "w": "or", "pos": "連接詞", "m": "或者", "theme": "介系詞與連接詞"}, {"id": 1297, "w": "since", "pos": "連接詞", "m": "自從；既然", "theme": "介系詞與連接詞"}, {"id": 1298, "w": "than", "pos": "連接詞", "m": "比", "theme": "介系詞與連接詞"}, {"id": 1299, "w": "therefore", "pos": "副詞", "m": "因此", "theme": "介系詞與連接詞"}, {"id": 1300, "w": "though", "pos": "連接詞", "m": "雖然", "theme": "介系詞與連接詞"}, {"id": 1301, "w": "accident", "pos": "名詞", "m": "事故", "theme": "抽象名詞 I"}, {"id": 1302, "w": "action", "pos": "名詞", "m": "行動", "theme": "抽象名詞 I"}, {"id": 1303, "w": "activity", "pos": "名詞", "m": "活動", "theme": "抽象名詞 I"}, {"id": 1304, "w": "advertisement", "pos": "名詞", "m": "廣告", "theme": "抽象名詞 I"}, {"id": 1305, "w": "advice", "pos": "名詞", "m": "建議", "theme": "抽象名詞 I"}, {"id": 1306, "w": "age", "pos": "名詞", "m": "年齡；時代", "theme": "抽象名詞 I"}, {"id": 1307, "w": "aim", "pos": "名詞", "m": "目標", "theme": "抽象名詞 I"}, {"id": 1308, "w": "alarm", "pos": "名詞", "m": "鬧鐘；警報", "theme": "抽象名詞 I"}, {"id": 1309, "w": "album", "pos": "名詞", "m": "相冊；專輯", "theme": "抽象名詞 I"}, {"id": 1310, "w": "American", "pos": "名詞", "m": "美國人", "theme": "抽象名詞 I"}, {"id": 1311, "w": "anger", "pos": "名詞", "m": "憤怒", "theme": "抽象名詞 I"}, {"id": 1312, "w": "army", "pos": "名詞", "m": "軍隊", "theme": "抽象名詞 I"}, {"id": 1313, "w": "Asian", "pos": "名詞", "m": "亞洲人", "theme": "抽象名詞 I"}, {"id": 1314, "w": "attention", "pos": "名詞", "m": "注意力", "theme": "抽象名詞 I"}, {"id": 1315, "w": "balloon", "pos": "名詞", "m": "氣球", "theme": "抽象名詞 I"}, {"id": 1316, "w": "band", "pos": "名詞", "m": "樂隊；帶子", "theme": "抽象名詞 I"}, {"id": 1317, "w": "base", "pos": "名詞", "m": "基礎；基地", "theme": "抽象名詞 I"}, {"id": 1318, "w": "beauty", "pos": "名詞", "m": "美麗", "theme": "抽象名詞 I"}, {"id": 1319, "w": "beginner", "pos": "名詞", "m": "初學者", "theme": "抽象名詞 I"}, {"id": 1320, "w": "beginning", "pos": "名詞", "m": "開始", "theme": "抽象名詞 I"}, {"id": 1321, "w": "bell", "pos": "名詞", "m": "鈴鐺", "theme": "抽象名詞 I"}, {"id": 1322, "w": "birthday", "pos": "名詞", "m": "生日", "theme": "抽象名詞 I"}, {"id": 1323, "w": "blank", "pos": "名詞", "m": "空白", "theme": "抽象名詞 I"}, {"id": 1324, "w": "blood", "pos": "名詞", "m": "血液", "theme": "抽象名詞 I"}, {"id": 1325, "w": "bomb", "pos": "名詞", "m": "炸彈", "theme": "抽象名詞 I"}, {"id": 1326, "w": "bottom", "pos": "名詞", "m": "底部", "theme": "抽象名詞 I"}, {"id": 1327, "w": "box", "pos": "名詞", "m": "盒子", "theme": "抽象名詞 I"}, {"id": 1328, "w": "branch", "pos": "名詞", "m": "樹枝；分支", "theme": "抽象名詞 I"}, {"id": 1329, "w": "bundle", "pos": "名詞", "m": "捆；束", "theme": "抽象名詞 I"}, {"id": 1330, "w": "cable", "pos": "名詞", "m": "電纜", "theme": "抽象名詞 I"}, {"id": 1331, "w": "cage", "pos": "名詞", "m": "籠子", "theme": "抽象名詞 I"}, {"id": 1332, "w": "can", "pos": "名詞", "m": "罐頭", "theme": "抽象名詞 I"}, {"id": 1333, "w": "captain", "pos": "名詞", "m": "隊長；船長", "theme": "抽象名詞 I"}, {"id": 1334, "w": "case", "pos": "名詞", "m": "案例；箱子", "theme": "抽象名詞 I"}, {"id": 1335, "w": "castle", "pos": "名詞", "m": "城堡", "theme": "抽象名詞 I"}, {"id": 1336, "w": "cause", "pos": "名詞", "m": "原因", "theme": "抽象名詞 I"}, {"id": 1337, "w": "cellphone", "pos": "名詞", "m": "手機", "theme": "抽象名詞 I"}, {"id": 1338, "w": "center", "pos": "名詞", "m": "中心", "theme": "抽象名詞 I"}, {"id": 1339, "w": "century", "pos": "名詞", "m": "世紀", "theme": "抽象名詞 I"}, {"id": 1340, "w": "chance", "pos": "名詞", "m": "機會", "theme": "抽象名詞 I"}, {"id": 1341, "w": "channel", "pos": "名詞", "m": "頻道；海峽", "theme": "抽象名詞 I"}, {"id": 1342, "w": "character", "pos": "名詞", "m": "角色；性格", "theme": "抽象名詞 I"}, {"id": 1343, "w": "chart", "pos": "名詞", "m": "圖表", "theme": "抽象名詞 I"}, {"id": 1344, "w": "cheer", "pos": "名詞", "m": "歡呼", "theme": "抽象名詞 I"}, {"id": 1345, "w": "childhood", "pos": "名詞", "m": "童年", "theme": "抽象名詞 I"}, {"id": 1346, "w": "choice", "pos": "名詞", "m": "選擇", "theme": "抽象名詞 I"}, {"id": 1347, "w": "club", "pos": "名詞", "m": "俱樂部", "theme": "抽象名詞 I"}, {"id": 1348, "w": "coach", "pos": "名詞", "m": "教練", "theme": "抽象名詞 I"}, {"id": 1349, "w": "command", "pos": "名詞", "m": "命令", "theme": "抽象名詞 I"}, {"id": 1350, "w": "congratulation", "pos": "名詞", "m": "祝賀", "theme": "抽象名詞 I"}, {"id": 1351, "w": "contract", "pos": "名詞", "m": "合約", "theme": "抽象名詞 I"}, {"id": 1352, "w": "corner", "pos": "名詞", "m": "角落", "theme": "抽象名詞 I"}, {"id": 1353, "w": "courage", "pos": "名詞", "m": "勇氣", "theme": "抽象名詞 I"}, {"id": 1354, "w": "court", "pos": "名詞", "m": "法庭；球場", "theme": "抽象名詞 I"}, {"id": 1355, "w": "crime", "pos": "名詞", "m": "犯罪", "theme": "抽象名詞 I"}, {"id": 1356, "w": "crowd", "pos": "名詞", "m": "人群", "theme": "抽象名詞 I"}, {"id": 1357, "w": "curve", "pos": "名詞", "m": "曲線", "theme": "抽象名詞 I"}, {"id": 1358, "w": "damage", "pos": "名詞", "m": "損害", "theme": "抽象名詞 I"}, {"id": 1359, "w": "danger", "pos": "名詞", "m": "危險", "theme": "抽象名詞 I"}, {"id": 1360, "w": "debate", "pos": "名詞", "m": "辯論", "theme": "抽象名詞 I"}, {"id": 1361, "w": "decision", "pos": "名詞", "m": "決定", "theme": "抽象名詞 I"}, {"id": 1362, "w": "department", "pos": "名詞", "m": "部門；系", "theme": "抽象名詞 I"}, {"id": 1363, "w": "desire", "pos": "名詞", "m": "慾望", "theme": "抽象名詞 I"}, {"id": 1364, "w": "difference", "pos": "名詞", "m": "差異", "theme": "抽象名詞 I"}, {"id": 1365, "w": "difficulty", "pos": "名詞", "m": "困難", "theme": "抽象名詞 I"}, {"id": 1366, "w": "direction", "pos": "名詞", "m": "方向", "theme": "抽象名詞 I"}, {"id": 1367, "w": "discussion", "pos": "名詞", "m": "討論", "theme": "抽象名詞 I"}, {"id": 1368, "w": "dream", "pos": "名詞", "m": "夢想", "theme": "抽象名詞 I"}, {"id": 1369, "w": "duty", "pos": "名詞", "m": "責任", "theme": "抽象名詞 I"}, {"id": 1370, "w": "edge", "pos": "名詞", "m": "邊緣", "theme": "抽象名詞 I"}, {"id": 1371, "w": "education", "pos": "名詞", "m": "教育", "theme": "抽象名詞 I"}, {"id": 1372, "w": "effort", "pos": "名詞", "m": "努力", "theme": "抽象名詞 I"}, {"id": 1373, "w": "e-mail", "pos": "名詞", "m": "電子郵件", "theme": "抽象名詞 I"}, {"id": 1374, "w": "emotion", "pos": "名詞", "m": "情緒", "theme": "抽象名詞 I"}, {"id": 1375, "w": "enemy", "pos": "名詞", "m": "敵人", "theme": "抽象名詞 I"}, {"id": 1376, "w": "energy", "pos": "名詞", "m": "能量", "theme": "抽象名詞 I"}, {"id": 1377, "w": "engine", "pos": "名詞", "m": "引擎", "theme": "抽象名詞 I"}, {"id": 1378, "w": "entrance", "pos": "名詞", "m": "入口", "theme": "抽象名詞 I"}, {"id": 1379, "w": "error", "pos": "名詞", "m": "錯誤", "theme": "抽象名詞 I"}, {"id": 1380, "w": "eve", "pos": "名詞", "m": "前夕", "theme": "抽象名詞 I"}, {"id": 1381, "w": "event", "pos": "名詞", "m": "事件", "theme": "抽象名詞 I"}, {"id": 1382, "w": "excuse", "pos": "名詞", "m": "藉口", "theme": "抽象名詞 I"}, {"id": 1383, "w": "exit", "pos": "名詞", "m": "出口", "theme": "抽象名詞 I"}, {"id": 1384, "w": "experience", "pos": "名詞", "m": "經驗", "theme": "抽象名詞 I"}, {"id": 1385, "w": "fact", "pos": "名詞", "m": "事實", "theme": "抽象名詞 I"}, {"id": 1386, "w": "fault", "pos": "名詞", "m": "過錯", "theme": "抽象名詞 I"}, {"id": 1387, "w": "fear", "pos": "名詞", "m": "恐懼", "theme": "抽象名詞 I"}, {"id": 1388, "w": "fee", "pos": "名詞", "m": "費用", "theme": "抽象名詞 I"}, {"id": 1389, "w": "feeling", "pos": "名詞", "m": "感覺", "theme": "抽象名詞 I"}, {"id": 1390, "w": "file", "pos": "名詞", "m": "檔案", "theme": "抽象名詞 I"}, {"id": 1391, "w": "fire", "pos": "名詞", "m": "火", "theme": "抽象名詞 I"}, {"id": 1392, "w": "flag", "pos": "名詞", "m": "旗幟", "theme": "抽象名詞 I"}, {"id": 1393, "w": "flight", "pos": "名詞", "m": "飛行；航班", "theme": "抽象名詞 I"}, {"id": 1394, "w": "foreigner", "pos": "名詞", "m": "外國人", "theme": "抽象名詞 I"}, {"id": 1395, "w": "flower", "pos": "名詞", "m": "花", "theme": "抽象名詞 I"}, {"id": 1396, "w": "freedom", "pos": "名詞", "m": "自由", "theme": "抽象名詞 I"}, {"id": 1397, "w": "friendship", "pos": "名詞", "m": "友誼", "theme": "抽象名詞 I"}, {"id": 1398, "w": "fun", "pos": "名詞", "m": "樂趣", "theme": "抽象名詞 I"}, {"id": 1399, "w": "garbage", "pos": "名詞", "m": "垃圾", "theme": "抽象名詞 I"}, {"id": 1400, "w": "gas", "pos": "名詞", "m": "瓦斯；汽油", "theme": "抽象名詞 I"}, {"id": 1401, "w": "gesture", "pos": "名詞", "m": "手勢", "theme": "抽象名詞 I"}, {"id": 1402, "w": "ghost", "pos": "名詞", "m": "鬼魂", "theme": "抽象名詞 I"}, {"id": 1403, "w": "gift", "pos": "名詞", "m": "禮物", "theme": "抽象名詞 I"}, {"id": 1404, "w": "goal", "pos": "名詞", "m": "目標", "theme": "抽象名詞 I"}, {"id": 1405, "w": "government", "pos": "名詞", "m": "政府", "theme": "抽象名詞 I"}, {"id": 1406, "w": "grass", "pos": "名詞", "m": "草", "theme": "抽象名詞 I"}, {"id": 1407, "w": "ground", "pos": "名詞", "m": "地面", "theme": "抽象名詞 I"}, {"id": 1408, "w": "group", "pos": "名詞", "m": "群組", "theme": "抽象名詞 I"}, {"id": 1409, "w": "gun", "pos": "名詞", "m": "槍", "theme": "抽象名詞 I"}, {"id": 1410, "w": "habit", "pos": "名詞", "m": "習慣", "theme": "抽象名詞 I"}, {"id": 1411, "w": "haircut", "pos": "名詞", "m": "理髮", "theme": "抽象名詞 I"}, {"id": 1412, "w": "heat", "pos": "名詞", "m": "熱", "theme": "抽象名詞 I"}, {"id": 1413, "w": "honesty", "pos": "名詞", "m": "誠實", "theme": "抽象名詞 I"}, {"id": 1414, "w": "honey", "pos": "名詞", "m": "蜂蜜；親愛的", "theme": "抽象名詞 I"}, {"id": 1415, "w": "human", "pos": "名詞", "m": "人類", "theme": "抽象名詞 I"}, {"id": 1416, "w": "humor", "pos": "名詞", "m": "幽默", "theme": "抽象名詞 I"}, {"id": 1417, "w": "hunger", "pos": "名詞", "m": "飢餓", "theme": "抽象名詞 I"}, {"id": 1418, "w": "idea", "pos": "名詞", "m": "主意", "theme": "抽象名詞 I"}, {"id": 1419, "w": "importance", "pos": "名詞", "m": "重要性", "theme": "抽象名詞 I"}, {"id": 1420, "w": "income", "pos": "名詞", "m": "收入", "theme": "抽象名詞 I"}, {"id": 1421, "w": "influence", "pos": "名詞", "m": "影響", "theme": "抽象名詞 I"}, {"id": 1422, "w": "information", "pos": "名詞", "m": "資訊", "theme": "抽象名詞 I"}, {"id": 1423, "w": "interest", "pos": "名詞", "m": "興趣", "theme": "抽象名詞 I"}, {"id": 1424, "w": "Internet", "pos": "名詞", "m": "網際網路", "theme": "抽象名詞 I"}, {"id": 1425, "w": "interview", "pos": "名詞", "m": "面試；訪談", "theme": "抽象名詞 I"}, {"id": 1426, "w": "invitation", "pos": "名詞", "m": "邀請", "theme": "抽象名詞 I"}, {"id": 1427, "w": "item", "pos": "名詞", "m": "項目", "theme": "抽象名詞 I"}, {"id": 1428, "w": "Japanese", "pos": "名詞", "m": "日本人", "theme": "抽象名詞 I"}, {"id": 1429, "w": "joke", "pos": "名詞", "m": "笑話", "theme": "抽象名詞 I"}, {"id": 1430, "w": "joy", "pos": "名詞", "m": "歡樂", "theme": "抽象名詞 I"}, {"id": 1431, "w": "kind", "pos": "名詞", "m": "種類", "theme": "抽象名詞 I"}, {"id": 1432, "w": "kingdom", "pos": "名詞", "m": "王國", "theme": "抽象名詞 I"}, {"id": 1433, "w": "Korean", "pos": "名詞", "m": "韓國人", "theme": "抽象名詞 I"}, {"id": 1434, "w": "lack", "pos": "名詞", "m": "缺乏", "theme": "抽象名詞 I"}, {"id": 1435, "w": "leader", "pos": "名詞", "m": "領袖", "theme": "抽象名詞 I"}, {"id": 1436, "w": "leaf", "pos": "名詞", "m": "葉子", "theme": "抽象名詞 I"}, {"id": 1437, "w": "level", "pos": "名詞", "m": "水平", "theme": "抽象名詞 I"}, {"id": 1438, "w": "lid", "pos": "名詞", "m": "蓋子", "theme": "抽象名詞 I"}, {"id": 1439, "w": "link", "pos": "名詞", "m": "連結", "theme": "抽象名詞 I"}, {"id": 1440, "w": "locker", "pos": "名詞", "m": "鎖櫃", "theme": "抽象名詞 I"}, {"id": 1441, "w": "mail", "pos": "名詞", "m": "郵件", "theme": "抽象名詞 I"}, {"id": 1442, "w": "manner", "pos": "名詞", "m": "禮貌；方式", "theme": "抽象名詞 I"}, {"id": 1443, "w": "mass", "pos": "名詞", "m": "團；大量", "theme": "抽象名詞 I"}, {"id": 1444, "w": "matter", "pos": "名詞", "m": "事情", "theme": "抽象名詞 I"}, {"id": 1445, "w": "meeting", "pos": "名詞", "m": "會議", "theme": "抽象名詞 I"}, {"id": 1446, "w": "member", "pos": "名詞", "m": "成員", "theme": "抽象名詞 I"}, {"id": 1447, "w": "message", "pos": "名詞", "m": "訊息", "theme": "抽象名詞 I"}, {"id": 1448, "w": "metal", "pos": "名詞", "m": "金屬", "theme": "抽象名詞 I"}, {"id": 1449, "w": "method", "pos": "名詞", "m": "方法", "theme": "抽象名詞 I"}, {"id": 1450, "w": "metro", "pos": "名詞", "m": "地鐵", "theme": "抽象名詞 I"}, {"id": 1451, "w": "mind", "pos": "名詞", "m": "心智", "theme": "抽象名詞 II"}, {"id": 1452, "w": "mistake", "pos": "名詞", "m": "錯誤", "theme": "抽象名詞 II"}, {"id": 1453, "w": "motion", "pos": "名詞", "m": "動作", "theme": "抽象名詞 II"}, {"id": 1454, "w": "movement", "pos": "名詞", "m": "運動", "theme": "抽象名詞 II"}, {"id": 1455, "w": "mud", "pos": "名詞", "m": "泥巴", "theme": "抽象名詞 II"}, {"id": 1456, "w": "nest", "pos": "名詞", "m": "鳥巢", "theme": "抽象名詞 II"}, {"id": 1457, "w": "news", "pos": "名詞", "m": "新聞", "theme": "抽象名詞 II"}, {"id": 1458, "w": "newspaper", "pos": "名詞", "m": "報紙", "theme": "抽象名詞 II"}, {"id": 1459, "w": "noise", "pos": "名詞", "m": "噪音", "theme": "抽象名詞 II"}, {"id": 1460, "w": "note", "pos": "名詞", "m": "筆記；音符", "theme": "抽象名詞 II"}, {"id": 1461, "w": "operation", "pos": "名詞", "m": "操作；手術", "theme": "抽象名詞 II"}, {"id": 1462, "w": "opinion", "pos": "名詞", "m": "意見", "theme": "抽象名詞 II"}, {"id": 1463, "w": "order", "pos": "名詞", "m": "命令；訂單", "theme": "抽象名詞 II"}, {"id": 1464, "w": "party", "pos": "名詞", "m": "派對；政黨", "theme": "抽象名詞 II"}, {"id": 1465, "w": "pattern", "pos": "名詞", "m": "模式", "theme": "抽象名詞 II"}, {"id": 1466, "w": "peace", "pos": "名詞", "m": "和平", "theme": "抽象名詞 II"}, {"id": 1467, "w": "period", "pos": "名詞", "m": "時期", "theme": "抽象名詞 II"}, {"id": 1468, "w": "photo", "pos": "名詞", "m": "照片", "theme": "抽象名詞 II"}, {"id": 1469, "w": "pile", "pos": "名詞", "m": "堆", "theme": "抽象名詞 II"}, {"id": 1470, "w": "pin", "pos": "名詞", "m": "大頭針", "theme": "抽象名詞 II"}, {"id": 1471, "w": "pipe", "pos": "名詞", "m": "管子", "theme": "抽象名詞 II"}, {"id": 1472, "w": "planet", "pos": "名詞", "m": "行星", "theme": "抽象名詞 II"}, {"id": 1473, "w": "player", "pos": "名詞", "m": "玩家；球員", "theme": "抽象名詞 II"}, {"id": 1474, "w": "poison", "pos": "名詞", "m": "毒藥", "theme": "抽象名詞 II"}, {"id": 1475, "w": "pollution", "pos": "名詞", "m": "污染", "theme": "抽象名詞 II"}, {"id": 1476, "w": "population", "pos": "名詞", "m": "人口", "theme": "抽象名詞 II"}, {"id": 1477, "w": "powder", "pos": "名詞", "m": "粉末", "theme": "抽象名詞 II"}, {"id": 1478, "w": "power", "pos": "名詞", "m": "力量；電力", "theme": "抽象名詞 II"}, {"id": 1479, "w": "pressure", "pos": "名詞", "m": "壓力", "theme": "抽象名詞 II"}, {"id": 1480, "w": "prize", "pos": "名詞", "m": "獎品", "theme": "抽象名詞 II"}, {"id": 1481, "w": "production", "pos": "名詞", "m": "生產", "theme": "抽象名詞 II"}, {"id": 1482, "w": "program", "pos": "名詞", "m": "節目；程式", "theme": "抽象名詞 II"}, {"id": 1483, "w": "progress", "pos": "名詞", "m": "進步", "theme": "抽象名詞 II"}, {"id": 1484, "w": "project", "pos": "名詞", "m": "專案", "theme": "抽象名詞 II"}, {"id": 1485, "w": "purpose", "pos": "名詞", "m": "目的", "theme": "抽象名詞 II"}, {"id": 1486, "w": "reason", "pos": "名詞", "m": "理由", "theme": "抽象名詞 II"}, {"id": 1487, "w": "report", "pos": "名詞", "m": "報告", "theme": "抽象名詞 II"}, {"id": 1488, "w": "result", "pos": "名詞", "m": "結果", "theme": "抽象名詞 II"}, {"id": 1489, "w": "robot", "pos": "名詞", "m": "機器人", "theme": "抽象名詞 II"}, {"id": 1490, "w": "rock", "pos": "名詞", "m": "岩石", "theme": "抽象名詞 II"}, {"id": 1491, "w": "role", "pos": "名詞", "m": "角色", "theme": "抽象名詞 II"}, {"id": 1492, "w": "root", "pos": "名詞", "m": "根", "theme": "抽象名詞 II"}, {"id": 1493, "w": "rope", "pos": "名詞", "m": "繩子", "theme": "抽象名詞 II"}, {"id": 1494, "w": "rose", "pos": "名詞", "m": "玫瑰", "theme": "抽象名詞 II"}, {"id": 1495, "w": "rule", "pos": "名詞", "m": "規則", "theme": "抽象名詞 II"}, {"id": 1496, "w": "safety", "pos": "名詞", "m": "安全", "theme": "抽象名詞 II"}, {"id": 1497, "w": "sale", "pos": "名詞", "m": "拍賣；銷售", "theme": "抽象名詞 II"}, {"id": 1498, "w": "sample", "pos": "名詞", "m": "樣品", "theme": "抽象名詞 II"}, {"id": 1499, "w": "sand", "pos": "名詞", "m": "沙子", "theme": "抽象名詞 II"}, {"id": 1500, "w": "scene", "pos": "名詞", "m": "場景", "theme": "抽象名詞 II"}, {"id": 1501, "w": "scenery", "pos": "名詞", "m": "風景", "theme": "抽象名詞 II"}, {"id": 1502, "w": "screen", "pos": "名詞", "m": "螢幕", "theme": "抽象名詞 II"}, {"id": 1503, "w": "secret", "pos": "名詞", "m": "秘密", "theme": "抽象名詞 II"}, {"id": 1504, "w": "seat", "pos": "名詞", "m": "座位", "theme": "抽象名詞 II"}, {"id": 1505, "w": "section", "pos": "名詞", "m": "部分", "theme": "抽象名詞 II"}, {"id": 1506, "w": "seed", "pos": "名詞", "m": "種子", "theme": "抽象名詞 II"}, {"id": 1507, "w": "sense", "pos": "名詞", "m": "感覺；理智", "theme": "抽象名詞 II"}, {"id": 1508, "w": "sentence", "pos": "名詞", "m": "句子", "theme": "抽象名詞 II"}, {"id": 1509, "w": "service", "pos": "名詞", "m": "服務", "theme": "抽象名詞 II"}, {"id": 1510, "w": "set", "pos": "名詞", "m": "一套", "theme": "抽象名詞 II"}, {"id": 1511, "w": "shore", "pos": "名詞", "m": "岸", "theme": "抽象名詞 II"}, {"id": 1512, "w": "side", "pos": "名詞", "m": "邊；側", "theme": "抽象名詞 II"}, {"id": 1513, "w": "sight", "pos": "名詞", "m": "景象", "theme": "抽象名詞 II"}, {"id": 1514, "w": "silence", "pos": "名詞", "m": "寂靜", "theme": "抽象名詞 II"}, {"id": 1515, "w": "skill", "pos": "名詞", "m": "技能", "theme": "抽象名詞 II"}, {"id": 1516, "w": "smile", "pos": "名詞", "m": "微笑", "theme": "抽象名詞 II"}, {"id": 1517, "w": "society", "pos": "名詞", "m": "社會", "theme": "抽象名詞 II"}, {"id": 1518, "w": "soul", "pos": "名詞", "m": "靈魂", "theme": "抽象名詞 II"}, {"id": 1519, "w": "space", "pos": "名詞", "m": "空間", "theme": "抽象名詞 II"}, {"id": 1520, "w": "speech", "pos": "名詞", "m": "演講", "theme": "抽象名詞 II"}, {"id": 1521, "w": "speed", "pos": "名詞", "m": "速度", "theme": "抽象名詞 II"}, {"id": 1522, "w": "spirit", "pos": "名詞", "m": "精神", "theme": "抽象名詞 II"}, {"id": 1523, "w": "state", "pos": "名詞", "m": "狀態；州", "theme": "抽象名詞 II"}, {"id": 1524, "w": "steam", "pos": "名詞", "m": "蒸汽", "theme": "抽象名詞 II"}, {"id": 1525, "w": "step", "pos": "名詞", "m": "步驟；腳步", "theme": "抽象名詞 II"}, {"id": 1526, "w": "stone", "pos": "名詞", "m": "石頭", "theme": "抽象名詞 II"}, {"id": 1527, "w": "story", "pos": "名詞", "m": "故事", "theme": "抽象名詞 II"}, {"id": 1528, "w": "string", "pos": "名詞", "m": "細繩", "theme": "抽象名詞 II"}, {"id": 1529, "w": "style", "pos": "名詞", "m": "風格", "theme": "抽象名詞 II"}, {"id": 1530, "w": "subject", "pos": "名詞", "m": "主題；科目", "theme": "抽象名詞 II"}, {"id": 1531, "w": "success", "pos": "名詞", "m": "成功", "theme": "抽象名詞 II"}, {"id": 1532, "w": "swing", "pos": "名詞", "m": "鞦韆；搖擺", "theme": "抽象名詞 II"}, {"id": 1533, "w": "symbol", "pos": "名詞", "m": "符號", "theme": "抽象名詞 II"}, {"id": 1534, "w": "system", "pos": "名詞", "m": "系統", "theme": "抽象名詞 II"}, {"id": 1535, "w": "Taiwanese", "pos": "名詞", "m": "台灣人", "theme": "抽象名詞 II"}, {"id": 1536, "w": "talent", "pos": "名詞", "m": "天賦", "theme": "抽象名詞 II"}, {"id": 1537, "w": "tear", "pos": "名詞", "m": "眼淚", "theme": "抽象名詞 II"}, {"id": 1538, "w": "term", "pos": "名詞", "m": "學期", "theme": "抽象名詞 II"}, {"id": 1539, "w": "thief", "pos": "名詞", "m": "小偷", "theme": "抽象名詞 II"}, {"id": 1540, "w": "thing", "pos": "名詞", "m": "東西", "theme": "抽象名詞 II"}, {"id": 1541, "w": "thought", "pos": "名詞", "m": "想法", "theme": "抽象名詞 II"}, {"id": 1542, "w": "ticket", "pos": "名詞", "m": "票", "theme": "抽象名詞 II"}, {"id": 1543, "w": "tip", "pos": "名詞", "m": "小費；提示", "theme": "抽象名詞 II"}, {"id": 1544, "w": "title", "pos": "名詞", "m": "標題", "theme": "抽象名詞 II"}, {"id": 1545, "w": "tool", "pos": "名詞", "m": "工具", "theme": "抽象名詞 II"}, {"id": 1546, "w": "topic", "pos": "名詞", "m": "話題", "theme": "抽象名詞 II"}, {"id": 1547, "w": "tower", "pos": "名詞", "m": "塔", "theme": "抽象名詞 II"}, {"id": 1548, "w": "trade", "pos": "名詞", "m": "貿易", "theme": "抽象名詞 II"}, {"id": 1549, "w": "tradition", "pos": "名詞", "m": "傳統", "theme": "抽象名詞 II"}, {"id": 1550, "w": "trash", "pos": "名詞", "m": "垃圾", "theme": "抽象名詞 II"}, {"id": 1551, "w": "treasure", "pos": "名詞", "m": "寶藏", "theme": "抽象名詞 II"}, {"id": 1552, "w": "treat", "pos": "名詞", "m": "款待", "theme": "抽象名詞 II"}, {"id": 1553, "w": "tree", "pos": "名詞", "m": "樹", "theme": "抽象名詞 II"}, {"id": 1554, "w": "trick", "pos": "名詞", "m": "詭計", "theme": "抽象名詞 II"}, {"id": 1555, "w": "trouble", "pos": "名詞", "m": "麻煩", "theme": "抽象名詞 II"}, {"id": 1556, "w": "truth", "pos": "名詞", "m": "真相", "theme": "抽象名詞 II"}, {"id": 1557, "w": "tunnel", "pos": "名詞", "m": "隧道", "theme": "抽象名詞 II"}, {"id": 1558, "w": "universe", "pos": "名詞", "m": "宇宙", "theme": "抽象名詞 II"}, {"id": 1559, "w": "value", "pos": "名詞", "m": "價值", "theme": "抽象名詞 II"}, {"id": 1560, "w": "victory", "pos": "名詞", "m": "勝利", "theme": "抽象名詞 II"}, {"id": 1561, "w": "voice", "pos": "名詞", "m": "聲音", "theme": "抽象名詞 II"}, {"id": 1562, "w": "war", "pos": "名詞", "m": "戰爭", "theme": "抽象名詞 II"}, {"id": 1563, "w": "way", "pos": "名詞", "m": "方式；道路", "theme": "抽象名詞 II"}, {"id": 1564, "w": "wedding", "pos": "名詞", "m": "婚禮", "theme": "抽象名詞 II"}, {"id": 1565, "w": "wood", "pos": "名詞", "m": "木材", "theme": "抽象名詞 II"}, {"id": 1566, "w": "word", "pos": "名詞", "m": "字詞", "theme": "抽象名詞 II"}, {"id": 1567, "w": "memory", "pos": "名詞", "m": "記憶", "theme": "感官與完成動詞"}, {"id": 1568, "w": "net", "pos": "名詞", "m": "網", "theme": "感官與完成動詞"}, {"id": 1569, "w": "principle", "pos": "名詞", "m": "原則", "theme": "感官與完成動詞"}, {"id": 1570, "w": "feel", "pos": "動詞", "m": "感覺", "theme": "感官與完成動詞"}, {"id": 1571, "w": "hear", "pos": "動詞", "m": "聽見", "theme": "感官與完成動詞"}, {"id": 1572, "w": "listen", "pos": "動詞", "m": "聆聽", "theme": "感官與完成動詞"}, {"id": 1573, "w": "look", "pos": "動詞", "m": "看", "theme": "感官與完成動詞"}, {"id": 1574, "w": "see", "pos": "動詞", "m": "看見", "theme": "感官與完成動詞"}, {"id": 1575, "w": "smell", "pos": "動詞", "m": "聞", "theme": "感官與完成動詞"}, {"id": 1576, "w": "sound", "pos": "動詞", "m": "聽起來", "theme": "感官與完成動詞"}, {"id": 1577, "w": "taste", "pos": "動詞", "m": "嘗起來", "theme": "感官與完成動詞"}, {"id": 1578, "w": "watch", "pos": "動詞", "m": "觀看", "theme": "感官與完成動詞"}, {"id": 1579, "w": "check", "pos": "動詞", "m": "檢查", "theme": "感官與完成動詞"}, {"id": 1580, "w": "complete", "pos": "動詞", "m": "完成", "theme": "感官與完成動詞"}, {"id": 1581, "w": "end", "pos": "動詞", "m": "結束", "theme": "感官與完成動詞"}, {"id": 1582, "w": "finish", "pos": "動詞", "m": "完成", "theme": "感官與完成動詞"}, {"id": 1583, "w": "succeed", "pos": "動詞", "m": "成功", "theme": "感官與完成動詞"}, {"id": 1584, "w": "survive", "pos": "動詞", "m": "生存", "theme": "感官與完成動詞"}, {"id": 1585, "w": "affect", "pos": "動詞", "m": "影響", "theme": "情緒與心理動詞"}, {"id": 1586, "w": "believe", "pos": "動詞", "m": "相信", "theme": "情緒與心理動詞"}, {"id": 1587, "w": "blame", "pos": "動詞", "m": "責備", "theme": "情緒與心理動詞"}, {"id": 1588, "w": "bother", "pos": "動詞", "m": "打擾", "theme": "情緒與心理動詞"}, {"id": 1589, "w": "confuse", "pos": "動詞", "m": "混淆", "theme": "情緒與心理動詞"}, {"id": 1590, "w": "consider", "pos": "動詞", "m": "考慮", "theme": "情緒與心理動詞"}, {"id": 1591, "w": "develop", "pos": "動詞", "m": "發展", "theme": "情緒與心理動詞"}, {"id": 1592, "w": "divide", "pos": "動詞", "m": "分割", "theme": "情緒與心理動詞"}, {"id": 1593, "w": "doubt", "pos": "動詞", "m": "懷疑", "theme": "情緒與心理動詞"}, {"id": 1594, "w": "ease", "pos": "動詞", "m": "緩和", "theme": "情緒與心理動詞"}, {"id": 1595, "w": "embarrass", "pos": "動詞", "m": "使尷尬", "theme": "情緒與心理動詞"}, {"id": 1596, "w": "forgive", "pos": "動詞", "m": "原諒", "theme": "情緒與心理動詞"}, {"id": 1597, "w": "forget", "pos": "動詞", "m": "忘記", "theme": "情緒與心理動詞"}, {"id": 1598, "w": "frighten", "pos": "動詞", "m": "使害怕", "theme": "情緒與心理動詞"}, {"id": 1599, "w": "gather", "pos": "動詞", "m": "聚集", "theme": "情緒與心理動詞"}, {"id": 1600, "w": "guess", "pos": "動詞", "m": "猜測", "theme": "情緒與心理動詞"}, {"id": 1601, "w": "hate", "pos": "動詞", "m": "討厭", "theme": "情緒與心理動詞"}, {"id": 1602, "w": "hope", "pos": "動詞", "m": "希望", "theme": "情緒與心理動詞"}, {"id": 1603, "w": "imagine", "pos": "動詞", "m": "想像", "theme": "情緒與心理動詞"}, {"id": 1604, "w": "inspire", "pos": "動詞", "m": "激勵", "theme": "情緒與心理動詞"}, {"id": 1605, "w": "know", "pos": "動詞", "m": "知道", "theme": "情緒與心理動詞"}, {"id": 1606, "w": "like", "pos": "動詞", "m": "喜歡", "theme": "情緒與心理動詞"}, {"id": 1607, "w": "love", "pos": "動詞", "m": "愛", "theme": "情緒與心理動詞"}, {"id": 1608, "w": "mind", "pos": "動詞", "m": "介意", "theme": "情緒與心理動詞"}, {"id": 1609, "w": "need", "pos": "動詞", "m": "需要", "theme": "情緒與心理動詞"}, {"id": 1610, "w": "notice", "pos": "動詞", "m": "注意到", "theme": "情緒與心理動詞"}, {"id": 1611, "w": "realize", "pos": "動詞", "m": "意識到", "theme": "情緒與心理動詞"}, {"id": 1612, "w": "regret", "pos": "動詞", "m": "後悔", "theme": "情緒與心理動詞"}, {"id": 1613, "w": "remember", "pos": "動詞", "m": "記得", "theme": "情緒與心理動詞"}, {"id": 1614, "w": "remind", "pos": "動詞", "m": "提醒", "theme": "情緒與心理動詞"}, {"id": 1615, "w": "surprise", "pos": "動詞", "m": "使驚訝", "theme": "情緒與心理動詞"}, {"id": 1616, "w": "think", "pos": "動詞", "m": "思考", "theme": "情緒與心理動詞"}, {"id": 1617, "w": "want", "pos": "動詞", "m": "想要", "theme": "情緒與心理動詞"}, {"id": 1618, "w": "wish", "pos": "動詞", "m": "希望", "theme": "情緒與心理動詞"}, {"id": 1619, "w": "worry", "pos": "動詞", "m": "擔心", "theme": "情緒與心理動詞"}, {"id": 1620, "w": "bless", "pos": "動詞", "m": "祝福", "theme": "情緒與心理動詞"}, {"id": 1621, "w": "act", "pos": "動詞", "m": "表演；行動", "theme": "動作動詞 I"}, {"id": 1622, "w": "bathe", "pos": "動詞", "m": "洗澡", "theme": "動作動詞 I"}, {"id": 1623, "w": "beat", "pos": "動詞", "m": "打擊", "theme": "動作動詞 I"}, {"id": 1624, "w": "blow", "pos": "動詞", "m": "吹", "theme": "動作動詞 I"}, {"id": 1625, "w": "bow", "pos": "動詞", "m": "鞠躬", "theme": "動作動詞 I"}, {"id": 1626, "w": "break", "pos": "動詞", "m": "打破", "theme": "動作動詞 I"}, {"id": 1627, "w": "bring", "pos": "動詞", "m": "帶來", "theme": "動作動詞 I"}, {"id": 1628, "w": "brush", "pos": "動詞", "m": "刷", "theme": "動作動詞 I"}, {"id": 1629, "w": "carry", "pos": "動詞", "m": "攜帶", "theme": "動作動詞 I"}, {"id": 1630, "w": "catch", "pos": "動詞", "m": "抓住", "theme": "動作動詞 I"}, {"id": 1631, "w": "chase", "pos": "動詞", "m": "追逐", "theme": "動作動詞 I"}, {"id": 1632, "w": "cheat", "pos": "動詞", "m": "欺騙", "theme": "動作動詞 I"}, {"id": 1633, "w": "choose", "pos": "動詞", "m": "選擇", "theme": "動作動詞 I"}, {"id": 1634, "w": "clap", "pos": "動詞", "m": "拍手", "theme": "動作動詞 I"}, {"id": 1635, "w": "close", "pos": "動詞", "m": "關閉", "theme": "動作動詞 I"}, {"id": 1636, "w": "come", "pos": "動詞", "m": "來", "theme": "動作動詞 I"}, {"id": 1637, "w": "control", "pos": "動詞", "m": "控制", "theme": "動作動詞 I"}, {"id": 1638, "w": "collect", "pos": "動詞", "m": "收集", "theme": "動作動詞 I"}, {"id": 1639, "w": "comment", "pos": "動詞", "m": "評論", "theme": "動作動詞 I"}, {"id": 1640, "w": "correct", "pos": "動詞", "m": "改正", "theme": "動作動詞 I"}, {"id": 1641, "w": "copy", "pos": "動詞", "m": "複製", "theme": "動作動詞 I"}, {"id": 1642, "w": "count", "pos": "動詞", "m": "數數", "theme": "動作動詞 I"}, {"id": 1643, "w": "cover", "pos": "動詞", "m": "覆蓋", "theme": "動作動詞 I"}, {"id": 1644, "w": "cry", "pos": "動詞", "m": "哭", "theme": "動作動詞 I"}, {"id": 1645, "w": "cut", "pos": "動詞", "m": "切割", "theme": "動作動詞 I"}, {"id": 1646, "w": "dial", "pos": "動詞", "m": "撥號", "theme": "動作動詞 I"}, {"id": 1647, "w": "dig", "pos": "動詞", "m": "挖掘", "theme": "動作動詞 I"}, {"id": 1648, "w": "define", "pos": "動詞", "m": "定義", "theme": "動作動詞 I"}, {"id": 1649, "w": "deliver", "pos": "動詞", "m": "遞送", "theme": "動作動詞 I"}, {"id": 1650, "w": "drop", "pos": "動詞", "m": "掉落", "theme": "動作動詞 I"}, {"id": 1651, "w": "elect", "pos": "動詞", "m": "選舉", "theme": "動作動詞 I"}, {"id": 1652, "w": "enter", "pos": "動詞", "m": "進入", "theme": "動作動詞 I"}, {"id": 1653, "w": "exist", "pos": "動詞", "m": "存在", "theme": "動作動詞 I"}, {"id": 1654, "w": "feed", "pos": "動詞", "m": "餵食", "theme": "動作動詞 I"}, {"id": 1655, "w": "fight", "pos": "動詞", "m": "打架", "theme": "動作動詞 I"}, {"id": 1656, "w": "follow", "pos": "動詞", "m": "跟隨", "theme": "動作動詞 I"}, {"id": 1657, "w": "fry", "pos": "動詞", "m": "油炸", "theme": "動作動詞 I"}, {"id": 1658, "w": "go", "pos": "動詞", "m": "去", "theme": "動作動詞 I"}, {"id": 1659, "w": "greet", "pos": "動詞", "m": "問候", "theme": "動作動詞 I"}, {"id": 1660, "w": "grow", "pos": "動詞", "m": "成長", "theme": "動作動詞 I"}, {"id": 1661, "w": "guide", "pos": "動詞", "m": "引導", "theme": "動作動詞 I"}, {"id": 1662, "w": "hang", "pos": "動詞", "m": "懸掛", "theme": "動作動詞 I"}, {"id": 1663, "w": "help", "pos": "動詞", "m": "幫助", "theme": "動作動詞 I"}, {"id": 1664, "w": "hit", "pos": "動詞", "m": "擊打", "theme": "動作動詞 I"}, {"id": 1665, "w": "hold", "pos": "動詞", "m": "握住", "theme": "動作動詞 I"}, {"id": 1666, "w": "hop", "pos": "動詞", "m": "單腳跳", "theme": "動作動詞 I"}, {"id": 1667, "w": "hunt", "pos": "動詞", "m": "狩獵", "theme": "動作動詞 I"}, {"id": 1668, "w": "hurry", "pos": "動詞", "m": "匆忙", "theme": "動作動詞 I"}, {"id": 1669, "w": "jump", "pos": "動詞", "m": "跳躍", "theme": "動作動詞 I"}, {"id": 1670, "w": "kick", "pos": "動詞", "m": "踢", "theme": "動作動詞 I"}, {"id": 1671, "w": "knock", "pos": "動詞", "m": "敲", "theme": "動作動詞 I"}, {"id": 1672, "w": "kill", "pos": "動詞", "m": "殺死", "theme": "動作動詞 I"}, {"id": 1673, "w": "kiss", "pos": "動詞", "m": "親吻", "theme": "動作動詞 I"}, {"id": 1674, "w": "laugh", "pos": "動詞", "m": "大笑", "theme": "動作動詞 I"}, {"id": 1675, "w": "lay", "pos": "動詞", "m": "放置（產卵）", "theme": "動作動詞 I"}, {"id": 1676, "w": "leave", "pos": "動詞", "m": "離開", "theme": "動作動詞 I"}, {"id": 1677, "w": "lick", "pos": "動詞", "m": "舔", "theme": "動作動詞 I"}, {"id": 1678, "w": "lift", "pos": "動詞", "m": "舉起", "theme": "動作動詞 I"}, {"id": 1679, "w": "list", "pos": "動詞", "m": "列出", "theme": "動作動詞 I"}, {"id": 1680, "w": "lock", "pos": "動詞", "m": "鎖上", "theme": "動作動詞 I"}, {"id": 1681, "w": "make", "pos": "動詞", "m": "製作", "theme": "動作動詞 I"}, {"id": 1682, "w": "meet", "pos": "動詞", "m": "遇見", "theme": "動作動詞 I"}, {"id": 1683, "w": "miss", "pos": "動詞", "m": "想念；未擊中", "theme": "動作動詞 I"}, {"id": 1684, "w": "mix", "pos": "動詞", "m": "混合", "theme": "動作動詞 I"}, {"id": 1685, "w": "move", "pos": "動詞", "m": "移動", "theme": "動作動詞 I"}, {"id": 1686, "w": "nod", "pos": "動詞", "m": "點頭", "theme": "動作動詞 I"}, {"id": 1687, "w": "offer", "pos": "動詞", "m": "提供", "theme": "動作動詞 I"}, {"id": 1688, "w": "open", "pos": "動詞", "m": "打開", "theme": "動作動詞 I"}, {"id": 1689, "w": "pack", "pos": "動詞", "m": "打包", "theme": "動作動詞 I"}, {"id": 1690, "w": "park", "pos": "動詞", "m": "停車", "theme": "動作動詞 I"}, {"id": 1691, "w": "paste", "pos": "動詞", "m": "貼上", "theme": "動作動詞 I"}, {"id": 1692, "w": "pause", "pos": "動詞", "m": "暫停", "theme": "動作動詞 I"}, {"id": 1693, "w": "pick", "pos": "動詞", "m": "撿起；選擇", "theme": "動作動詞 I"}, {"id": 1694, "w": "plant", "pos": "動詞", "m": "種植", "theme": "動作動詞 I"}, {"id": 1695, "w": "print", "pos": "動詞", "m": "列印", "theme": "動作動詞 I"}, {"id": 1696, "w": "pull", "pos": "動詞", "m": "拉", "theme": "動作動詞 I"}, {"id": 1697, "w": "produce", "pos": "動詞", "m": "生產", "theme": "動作動詞 I"}, {"id": 1698, "w": "protect", "pos": "動詞", "m": "保護", "theme": "動作動詞 I"}, {"id": 1699, "w": "push", "pos": "動詞", "m": "推", "theme": "動作動詞 I"}, {"id": 1700, "w": "put", "pos": "動詞", "m": "放", "theme": "動作動詞 I"}, {"id": 1701, "w": "recycle", "pos": "動詞", "m": "回收", "theme": "動作動詞 I"}, {"id": 1702, "w": "revise", "pos": "動詞", "m": "修改", "theme": "動作動詞 I"}, {"id": 1703, "w": "rise", "pos": "動詞", "m": "上升", "theme": "動作動詞 I"}, {"id": 1704, "w": "roll", "pos": "動詞", "m": "滾動", "theme": "動作動詞 I"}, {"id": 1705, "w": "rub", "pos": "動詞", "m": "摩擦", "theme": "動作動詞 I"}, {"id": 1706, "w": "run", "pos": "動詞", "m": "跑", "theme": "動作動詞 I"}, {"id": 1707, "w": "rob", "pos": "動詞", "m": "搶劫", "theme": "動作動詞 I"}, {"id": 1708, "w": "rest", "pos": "動詞", "m": "休息", "theme": "動作動詞 I"}, {"id": 1709, "w": "shake", "pos": "動詞", "m": "搖動", "theme": "動作動詞 I"}, {"id": 1710, "w": "shoot", "pos": "動詞", "m": "射擊", "theme": "動作動詞 I"}, {"id": 1711, "w": "shout", "pos": "動詞", "m": "喊叫", "theme": "動作動詞 I"}, {"id": 1712, "w": "shut", "pos": "動詞", "m": "關閉", "theme": "動作動詞 I"}, {"id": 1713, "w": "smoke", "pos": "動詞", "m": "抽煙", "theme": "動作動詞 I"}, {"id": 1714, "w": "sign", "pos": "動詞", "m": "簽名", "theme": "動作動詞 I"}, {"id": 1715, "w": "stand", "pos": "動詞", "m": "站立", "theme": "動作動詞 I"}, {"id": 1716, "w": "steal", "pos": "動詞", "m": "偷竊", "theme": "動作動詞 I"}, {"id": 1717, "w": "strike", "pos": "動詞", "m": "打擊；罷工", "theme": "動作動詞 I"}, {"id": 1718, "w": "take", "pos": "動詞", "m": "拿；帶", "theme": "動作動詞 I"}, {"id": 1719, "w": "tell", "pos": "動詞", "m": "告訴", "theme": "動作動詞 I"}, {"id": 1720, "w": "throw", "pos": "動詞", "m": "丟擲", "theme": "動作動詞 I"}, {"id": 1721, "w": "touch", "pos": "動詞", "m": "觸摸", "theme": "動作動詞 I"}, {"id": 1722, "w": "type", "pos": "動詞", "m": "打字", "theme": "動作動詞 I"}, {"id": 1723, "w": "use", "pos": "動詞", "m": "使用", "theme": "動作動詞 I"}, {"id": 1724, "w": "vote", "pos": "動詞", "m": "投票", "theme": "動作動詞 I"}, {"id": 1725, "w": "walk", "pos": "動詞", "m": "走路", "theme": "動作動詞 I"}, {"id": 1726, "w": "wave", "pos": "動詞", "m": "揮手", "theme": "動作動詞 I"}, {"id": 1727, "w": "hug", "pos": "動詞", "m": "擁抱", "theme": "動作動詞 I"}, {"id": 1728, "w": "yell", "pos": "動詞", "m": "大叫", "theme": "動作動詞 I"}, {"id": 1729, "w": "mop", "pos": "動詞", "m": "用拖把拖地", "theme": "動作動詞 I"}, {"id": 1730, "w": "accept", "pos": "動詞", "m": "接受", "theme": "動作動詞 II"}, {"id": 1731, "w": "add", "pos": "動詞", "m": "增加", "theme": "動作動詞 II"}, {"id": 1732, "w": "admire", "pos": "動詞", "m": "欽佩", "theme": "動作動詞 II"}, {"id": 1733, "w": "advise", "pos": "動詞", "m": "建議", "theme": "動作動詞 II"}, {"id": 1734, "w": "agree", "pos": "動詞", "m": "同意", "theme": "動作動詞 II"}, {"id": 1735, "w": "allow", "pos": "動詞", "m": "允許", "theme": "動作動詞 II"}, {"id": 1736, "w": "apologize", "pos": "動詞", "m": "道歉", "theme": "動作動詞 II"}, {"id": 1737, "w": "appear", "pos": "動詞", "m": "出現", "theme": "動作動詞 II"}, {"id": 1738, "w": "appreciate", "pos": "動詞", "m": "欣賞；感謝", "theme": "動作動詞 II"}, {"id": 1739, "w": "argue", "pos": "動詞", "m": "爭論", "theme": "動作動詞 II"}, {"id": 1740, "w": "arrange", "pos": "動詞", "m": "安排", "theme": "動作動詞 II"}, {"id": 1741, "w": "assume", "pos": "動詞", "m": "假設", "theme": "動作動詞 II"}, {"id": 1742, "w": "attack", "pos": "動詞", "m": "攻擊", "theme": "動作動詞 II"}, {"id": 1743, "w": "avoid", "pos": "動詞", "m": "避免", "theme": "動作動詞 II"}, {"id": 1744, "w": "become", "pos": "動詞", "m": "變成", "theme": "動作動詞 II"}, {"id": 1745, "w": "begin", "pos": "動詞", "m": "開始", "theme": "動作動詞 II"}, {"id": 1746, "w": "belong", "pos": "動詞", "m": "屬於", "theme": "動作動詞 II"}, {"id": 1747, "w": "broadcast", "pos": "動詞", "m": "廣播", "theme": "動作動詞 II"}, {"id": 1748, "w": "burst", "pos": "動詞", "m": "爆發", "theme": "動作動詞 II"}, {"id": 1749, "w": "call", "pos": "動詞", "m": "打電話；呼叫", "theme": "動作動詞 II"}, {"id": 1750, "w": "calm", "pos": "動詞", "m": "使冷靜", "theme": "動作動詞 II"}, {"id": 1751, "w": "cancel", "pos": "動詞", "m": "取消", "theme": "動作動詞 II"}, {"id": 1752, "w": "care", "pos": "動詞", "m": "關心", "theme": "動作動詞 II"}, {"id": 1753, "w": "certain", "pos": "形容詞", "m": "確定的", "theme": "動作動詞 II"}, {"id": 1754, "w": "check", "pos": "動詞", "m": "檢查", "theme": "動作動詞 II"}, {"id": 1755, "w": "compare", "pos": "動詞", "m": "比較", "theme": "動作動詞 II"}, {"id": 1756, "w": "complain", "pos": "動詞", "m": "抱怨", "theme": "動作動詞 II"}, {"id": 1757, "w": "concern", "pos": "動詞", "m": "關心；涉及", "theme": "動作動詞 II"}, {"id": 1758, "w": "continue", "pos": "動詞", "m": "繼續", "theme": "動作動詞 II"}, {"id": 1759, "w": "create", "pos": "動詞", "m": "創造", "theme": "動作動詞 II"}, {"id": 1760, "w": "date", "pos": "動詞", "m": "約會", "theme": "動作動詞 II"}, {"id": 1761, "w": "deal", "pos": "動詞", "m": "處理", "theme": "動作動詞 II"}, {"id": 1762, "w": "decide", "pos": "動詞", "m": "決定", "theme": "動作動詞 II"}, {"id": 1763, "w": "decrease", "pos": "動詞", "m": "減少", "theme": "動作動詞 II"}, {"id": 1764, "w": "depend", "pos": "動詞", "m": "依賴", "theme": "動作動詞 II"}, {"id": 1765, "w": "describe", "pos": "動詞", "m": "描述", "theme": "動作動詞 II"}, {"id": 1766, "w": "detect", "pos": "動詞", "m": "偵測", "theme": "動作動詞 II"}, {"id": 1767, "w": "die", "pos": "動詞", "m": "死亡", "theme": "動作動詞 II"}, {"id": 1768, "w": "direct", "pos": "動詞", "m": "指導", "theme": "動作動詞 II"}, {"id": 1769, "w": "disappear", "pos": "動詞", "m": "消失", "theme": "動作動詞 II"}, {"id": 1770, "w": "discover", "pos": "動詞", "m": "發現", "theme": "動作動詞 II"}, {"id": 1771, "w": "discuss", "pos": "動詞", "m": "討論", "theme": "動作動詞 II"}, {"id": 1772, "w": "download", "pos": "動詞", "m": "下載", "theme": "動作動詞 II"}, {"id": 1773, "w": "emphasize", "pos": "動詞", "m": "強調", "theme": "動作動詞 II"}, {"id": 1774, "w": "enjoy", "pos": "動詞", "m": "享受", "theme": "動作動詞 II"}, {"id": 1775, "w": "envy", "pos": "動詞", "m": "嫉妒", "theme": "動作動詞 II"}, {"id": 1776, "w": "excite", "pos": "動詞", "m": "使興奮", "theme": "動作動詞 II"}, {"id": 1777, "w": "expect", "pos": "動詞", "m": "預期", "theme": "動作動詞 II"}, {"id": 1778, "w": "explain", "pos": "動詞", "m": "解釋", "theme": "動作動詞 II"}, {"id": 1779, "w": "express", "pos": "動詞", "m": "表達", "theme": "動作動詞 II"}, {"id": 1780, "w": "fall", "pos": "動詞", "m": "掉落", "theme": "動作動詞 II"}, {"id": 1781, "w": "fill", "pos": "動詞", "m": "填滿", "theme": "動作動詞 II"}, {"id": 1782, "w": "find", "pos": "動詞", "m": "找到", "theme": "動作動詞 II"}, {"id": 1783, "w": "fit", "pos": "動詞", "m": "適合", "theme": "動作動詞 II"}, {"id": 1784, "w": "focus", "pos": "動詞", "m": "聚焦", "theme": "動作動詞 II"}, {"id": 1785, "w": "form", "pos": "動詞", "m": "形成", "theme": "動作動詞 II"}, {"id": 1786, "w": "get", "pos": "動詞", "m": "得到", "theme": "動作動詞 II"}, {"id": 1787, "w": "give", "pos": "動詞", "m": "給予", "theme": "動作動詞 II"}, {"id": 1788, "w": "handle", "pos": "動詞", "m": "處理", "theme": "動作動詞 II"}, {"id": 1789, "w": "happen", "pos": "動詞", "m": "發生", "theme": "動作動詞 II"}, {"id": 1790, "w": "hide", "pos": "動詞", "m": "隱藏", "theme": "動作動詞 II"}, {"id": 1791, "w": "hurt", "pos": "動詞", "m": "傷害", "theme": "動作動詞 II"}, {"id": 1792, "w": "improve", "pos": "動詞", "m": "改善", "theme": "動作動詞 II"}, {"id": 1793, "w": "include", "pos": "動詞", "m": "包含", "theme": "動作動詞 II"}, {"id": 1794, "w": "ignore", "pos": "動詞", "m": "忽略", "theme": "動作動詞 II"}, {"id": 1795, "w": "increase", "pos": "動詞", "m": "增加", "theme": "動作動詞 II"}, {"id": 1796, "w": "insist", "pos": "動詞", "m": "堅持", "theme": "動作動詞 II"}, {"id": 1797, "w": "interrupt", "pos": "動詞", "m": "打斷", "theme": "動作動詞 II"}, {"id": 1798, "w": "introduce", "pos": "動詞", "m": "介紹", "theme": "動作動詞 II"}, {"id": 1799, "w": "invent", "pos": "動詞", "m": "發明", "theme": "動作動詞 II"}, {"id": 1800, "w": "invite", "pos": "動詞", "m": "邀請", "theme": "動作動詞 II"}, {"id": 1801, "w": "join", "pos": "動詞", "m": "加入", "theme": "動作動詞 II"}, {"id": 1802, "w": "judge", "pos": "動詞", "m": "判斷", "theme": "動作動詞 II"}, {"id": 1803, "w": "keep", "pos": "動詞", "m": "保持", "theme": "動作動詞 II"}, {"id": 1804, "w": "lead", "pos": "動詞", "m": "領導", "theme": "動作動詞 II"}, {"id": 1805, "w": "let", "pos": "動詞", "m": "讓", "theme": "動作動詞 II"}, {"id": 1806, "w": "lie", "pos": "動詞", "m": "說謊；躺", "theme": "動作動詞 II"}, {"id": 1807, "w": "limit", "pos": "動詞", "m": "限制", "theme": "動作動詞 II"}, {"id": 1808, "w": "list", "pos": "動詞", "m": "列出", "theme": "動作動詞 II"}, {"id": 1809, "w": "match", "pos": "動詞", "m": "匹配", "theme": "動作動詞 II"}, {"id": 1810, "w": "mean", "pos": "動詞", "m": "意思是", "theme": "動作動詞 II"}, {"id": 1811, "w": "notice", "pos": "動詞", "m": "注意到", "theme": "動作動詞 II"}, {"id": 1812, "w": "obey", "pos": "動詞", "m": "服從", "theme": "動作動詞 II"}, {"id": 1813, "w": "omit", "pos": "動詞", "m": "省略", "theme": "動作動詞 II"}, {"id": 1814, "w": "own", "pos": "動詞", "m": "擁有", "theme": "動作動詞 II"}, {"id": 1815, "w": "plan", "pos": "動詞", "m": "計劃", "theme": "動作動詞 II"}, {"id": 1816, "w": "pollute", "pos": "動詞", "m": "污染", "theme": "動作動詞 II"}, {"id": 1817, "w": "praise", "pos": "動詞", "m": "讚美", "theme": "動作動詞 II"}, {"id": 1818, "w": "pray", "pos": "動詞", "m": "祈禱", "theme": "動作動詞 II"}, {"id": 1819, "w": "prepare", "pos": "動詞", "m": "準備", "theme": "動作動詞 II"}, {"id": 1820, "w": "promise", "pos": "動詞", "m": "承諾", "theme": "動作動詞 II"}, {"id": 1821, "w": "provide", "pos": "動詞", "m": "提供", "theme": "動作動詞 II"}, {"id": 1822, "w": "quit", "pos": "動詞", "m": "退出", "theme": "動作動詞 II"}, {"id": 1823, "w": "raise", "pos": "動詞", "m": "提高；撫養", "theme": "動作動詞 II"}, {"id": 1824, "w": "reach", "pos": "動詞", "m": "到達", "theme": "動作動詞 II"}, {"id": 1825, "w": "receive", "pos": "動詞", "m": "接收", "theme": "動作動詞 II"}, {"id": 1826, "w": "refuse", "pos": "動詞", "m": "拒絕", "theme": "動作動詞 II"}, {"id": 1827, "w": "reject", "pos": "動詞", "m": "拒絕", "theme": "動作動詞 II"}, {"id": 1828, "w": "rent", "pos": "動詞", "m": "租用", "theme": "動作動詞 II"}, {"id": 1829, "w": "respect", "pos": "動詞", "m": "尊重", "theme": "動作動詞 II"}, {"id": 1830, "w": "return", "pos": "動詞", "m": "歸還", "theme": "動作動詞 II"}, {"id": 1831, "w": "ruin", "pos": "動詞", "m": "毀滅", "theme": "動作動詞 II"}, {"id": 1832, "w": "solve", "pos": "動詞", "m": "解決", "theme": "動作動詞 II"}, {"id": 1833, "w": "satisfy", "pos": "動詞", "m": "滿足", "theme": "動作動詞 II"}, {"id": 1834, "w": "save", "pos": "動詞", "m": "拯救；儲存", "theme": "動作動詞 II"}, {"id": 1835, "w": "search", "pos": "動詞", "m": "搜尋", "theme": "動作動詞 II"}, {"id": 1836, "w": "seem", "pos": "動詞", "m": "似乎", "theme": "動作動詞 II"}, {"id": 1837, "w": "select", "pos": "動詞", "m": "選擇", "theme": "動作動詞 II"}, {"id": 1838, "w": "sell", "pos": "動詞", "m": "賣", "theme": "動作動詞 II"}, {"id": 1839, "w": "send", "pos": "動詞", "m": "傳送", "theme": "動作動詞 II"}, {"id": 1840, "w": "serve", "pos": "動詞", "m": "服務", "theme": "動作動詞 II"}, {"id": 1841, "w": "share", "pos": "動詞", "m": "分享", "theme": "動作動詞 II"}, {"id": 1842, "w": "show", "pos": "動詞", "m": "展示", "theme": "動作動詞 II"}, {"id": 1843, "w": "sleep", "pos": "動詞", "m": "睡覺", "theme": "動作動詞 II"}, {"id": 1844, "w": "start", "pos": "動詞", "m": "開始", "theme": "動作動詞 II"}, {"id": 1845, "w": "stay", "pos": "動詞", "m": "停留", "theme": "動作動詞 II"}, {"id": 1846, "w": "stop", "pos": "動詞", "m": "停止", "theme": "動作動詞 II"}, {"id": 1847, "w": "suggest", "pos": "動詞", "m": "建議", "theme": "動作動詞 II"}, {"id": 1848, "w": "support", "pos": "動詞", "m": "支持", "theme": "動作動詞 II"}, {"id": 1849, "w": "thank", "pos": "動詞", "m": "感謝", "theme": "動作動詞 II"}, {"id": 1850, "w": "treat", "pos": "動詞", "m": "對待", "theme": "動作動詞 II"}, {"id": 1851, "w": "trust", "pos": "動詞", "m": "信任", "theme": "動作動詞 II"}, {"id": 1852, "w": "try", "pos": "動詞", "m": "嘗試", "theme": "動作動詞 II"}, {"id": 1853, "w": "upload", "pos": "動詞", "m": "上傳", "theme": "動作動詞 II"}, {"id": 1854, "w": "visit", "pos": "動詞", "m": "拜訪", "theme": "動作動詞 II"}, {"id": 1855, "w": "wait", "pos": "動詞", "m": "等待", "theme": "動作動詞 II"}, {"id": 1856, "w": "wake", "pos": "動詞", "m": "醒來", "theme": "動作動詞 II"}, {"id": 1857, "w": "waste", "pos": "動詞", "m": "浪費", "theme": "動作動詞 II"}, {"id": 1858, "w": "welcome", "pos": "動詞", "m": "歡迎", "theme": "動作動詞 II"}, {"id": 1859, "w": "able", "pos": "形容詞", "m": "能夠的", "theme": "形容詞大集合"}, {"id": 1860, "w": "absent", "pos": "形容詞", "m": "缺席的", "theme": "形容詞大集合"}, {"id": 1861, "w": "afraid", "pos": "形容詞", "m": "害怕的", "theme": "形容詞大集合"}, {"id": 1862, "w": "alike", "pos": "形容詞", "m": "相似的", "theme": "形容詞大集合"}, {"id": 1863, "w": "alive", "pos": "形容詞", "m": "活著的", "theme": "形容詞大集合"}, {"id": 1864, "w": "ancient", "pos": "形容詞", "m": "古代的", "theme": "形容詞大集合"}, {"id": 1865, "w": "asleep", "pos": "形容詞", "m": "睡著的", "theme": "形容詞大集合"}, {"id": 1866, "w": "available", "pos": "形容詞", "m": "可用的；有空的", "theme": "形容詞大集合"}, {"id": 1867, "w": "basic", "pos": "形容詞", "m": "基本的", "theme": "形容詞大集合"}, {"id": 1868, "w": "bright", "pos": "形容詞", "m": "明亮的；聰明的", "theme": "形容詞大集合"}, {"id": 1869, "w": "broad", "pos": "形容詞", "m": "寬廣的", "theme": "形容詞大集合"}, {"id": 1870, "w": "classical", "pos": "形容詞", "m": "古典的", "theme": "形容詞大集合"}, {"id": 1871, "w": "colorful", "pos": "形容詞", "m": "多彩的", "theme": "形容詞大集合"}, {"id": 1872, "w": "common", "pos": "形容詞", "m": "普通的；常見的", "theme": "形容詞大集合"}, {"id": 1873, "w": "complete", "pos": "形容詞", "m": "完整的", "theme": "形容詞大集合"}, {"id": 1874, "w": "convenient", "pos": "形容詞", "m": "方便的", "theme": "形容詞大集合"}, {"id": 1875, "w": "correct", "pos": "形容詞", "m": "正確的", "theme": "形容詞大集合"}, {"id": 1876, "w": "crowded", "pos": "形容詞", "m": "擁擠的", "theme": "形容詞大集合"}, {"id": 1877, "w": "dangerous", "pos": "形容詞", "m": "危險的", "theme": "形容詞大集合"}, {"id": 1878, "w": "dark", "pos": "形容詞", "m": "黑暗的", "theme": "形容詞大集合"}, {"id": 1879, "w": "dead", "pos": "形容詞", "m": "死的", "theme": "形容詞大集合"}, {"id": 1880, "w": "dear", "pos": "形容詞", "m": "親愛的；昂貴的", "theme": "形容詞大集合"}, {"id": 1881, "w": "different", "pos": "形容詞", "m": "不同的", "theme": "形容詞大集合"}, {"id": 1882, "w": "difficult", "pos": "形容詞", "m": "困難的", "theme": "形容詞大集合"}, {"id": 1883, "w": "dirty", "pos": "形容詞", "m": "骯髒的", "theme": "形容詞大集合"}, {"id": 1884, "w": "double", "pos": "形容詞", "m": "雙倍的", "theme": "形容詞大集合"}, {"id": 1885, "w": "easy", "pos": "形容詞", "m": "容易的", "theme": "形容詞大集合"}, {"id": 1886, "w": "electric", "pos": "形容詞", "m": "電的", "theme": "形容詞大集合"}, {"id": 1887, "w": "enough", "pos": "形容詞", "m": "足夠的", "theme": "形容詞大集合"}, {"id": 1888, "w": "equal", "pos": "形容詞", "m": "平等的", "theme": "形容詞大集合"}, {"id": 1889, "w": "excellent", "pos": "形容詞", "m": "優秀的", "theme": "形容詞大集合"}, {"id": 1890, "w": "fantastic", "pos": "形容詞", "m": "極好的", "theme": "形容詞大集合"}, {"id": 1891, "w": "fair", "pos": "形容詞", "m": "公平的", "theme": "形容詞大集合"}, {"id": 1892, "w": "fashionable", "pos": "形容詞", "m": "時尚的", "theme": "形容詞大集合"}, {"id": 1893, "w": "favorite", "pos": "形容詞", "m": "最喜愛的", "theme": "形容詞大集合"}, {"id": 1894, "w": "foreign", "pos": "形容詞", "m": "外國的", "theme": "形容詞大集合"}, {"id": 1895, "w": "formal", "pos": "形容詞", "m": "正式的", "theme": "形容詞大集合"}, {"id": 1896, "w": "former", "pos": "形容詞", "m": "前任的；以前的", "theme": "形容詞大集合"}, {"id": 1897, "w": "free", "pos": "形容詞", "m": "免費的；自由的", "theme": "形容詞大集合"}, {"id": 1898, "w": "fresh", "pos": "形容詞", "m": "新鮮的", "theme": "形容詞大集合"}, {"id": 1899, "w": "glad", "pos": "形容詞", "m": "高興的", "theme": "形容詞大集合"}, {"id": 1900, "w": "hard", "pos": "形容詞", "m": "硬的；困難的", "theme": "形容詞大集合"}, {"id": 1901, "w": "helpful", "pos": "形容詞", "m": "有幫助的", "theme": "形容詞大集合"}, {"id": 1902, "w": "homesick", "pos": "形容詞", "m": "想家的", "theme": "形容詞大集合"}, {"id": 1903, "w": "horrible", "pos": "形容詞", "m": "可怕的", "theme": "形容詞大集合"}, {"id": 1904, "w": "important", "pos": "形容詞", "m": "重要的", "theme": "形容詞大集合"}, {"id": 1905, "w": "impossible", "pos": "形容詞", "m": "不可能的", "theme": "形容詞大集合"}, {"id": 1906, "w": "independent", "pos": "形容詞", "m": "獨立的", "theme": "形容詞大集合"}, {"id": 1907, "w": "instant", "pos": "形容詞", "m": "立即的", "theme": "形容詞大集合"}, {"id": 1908, "w": "interesting", "pos": "形容詞", "m": "有趣的", "theme": "形容詞大集合"}, {"id": 1909, "w": "latest", "pos": "形容詞", "m": "最新的", "theme": "形容詞大集合"}, {"id": 1910, "w": "loud", "pos": "形容詞", "m": "大聲的", "theme": "形容詞大集合"}, {"id": 1911, "w": "lucky", "pos": "形容詞", "m": "幸運的", "theme": "形容詞大集合"}, {"id": 1912, "w": "magic", "pos": "形容詞", "m": "魔法的", "theme": "形容詞大集合"}, {"id": 1913, "w": "major", "pos": "形容詞", "m": "主要的", "theme": "形容詞大集合"}, {"id": 1914, "w": "marvelous", "pos": "形容詞", "m": "不可思議的；極好的", "theme": "形容詞大集合"}, {"id": 1915, "w": "minor", "pos": "形容詞", "m": "次要的；較小的", "theme": "形容詞大集合"}, {"id": 1916, "w": "modern", "pos": "形容詞", "m": "現代的", "theme": "形容詞大集合"}, {"id": 1917, "w": "national", "pos": "形容詞", "m": "國家的", "theme": "形容詞大集合"}, {"id": 1918, "w": "necessary", "pos": "形容詞", "m": "必要的", "theme": "形容詞大集合"}, {"id": 1919, "w": "negative", "pos": "形容詞", "m": "負面的", "theme": "形容詞大集合"}, {"id": 1920, "w": "noisy", "pos": "形容詞", "m": "吵鬧的", "theme": "形容詞大集合"}, {"id": 1921, "w": "ordinary", "pos": "形容詞", "m": "普通的", "theme": "形容詞大集合"}, {"id": 1922, "w": "overseas", "pos": "形容詞", "m": "海外的", "theme": "形容詞大集合"}, {"id": 1923, "w": "peaceful", "pos": "形容詞", "m": "和平的", "theme": "形容詞大集合"}, {"id": 1924, "w": "perfect", "pos": "形容詞", "m": "完美的", "theme": "形容詞大集合"}, {"id": 1925, "w": "personal", "pos": "形容詞", "m": "個人的", "theme": "形容詞大集合"}, {"id": 1926, "w": "popular", "pos": "形容詞", "m": "受歡迎的", "theme": "形容詞大集合"}, {"id": 1927, "w": "positive", "pos": "形容詞", "m": "正面的；陽性的", "theme": "形容詞大集合"}, {"id": 1928, "w": "possible", "pos": "形容詞", "m": "可能的", "theme": "形容詞大集合"}, {"id": 1929, "w": "precious", "pos": "形容詞", "m": "珍貴的", "theme": "形容詞大集合"}, {"id": 1930, "w": "present", "pos": "形容詞", "m": "現在的；出席的", "theme": "形容詞大集合"}, {"id": 1931, "w": "private", "pos": "形容詞", "m": "私人的", "theme": "形容詞大集合"}, {"id": 1932, "w": "public", "pos": "形容詞", "m": "公眾的；公共的", "theme": "形容詞大集合"}, {"id": 1933, "w": "quiet", "pos": "形容詞", "m": "安靜的", "theme": "形容詞大集合"}, {"id": 1934, "w": "rare", "pos": "形容詞", "m": "稀有的", "theme": "形容詞大集合"}, {"id": 1935, "w": "ready", "pos": "形容詞", "m": "準備好的", "theme": "形容詞大集合"}, {"id": 1936, "w": "real", "pos": "形容詞", "m": "真實的", "theme": "形容詞大集合"}, {"id": 1937, "w": "regular", "pos": "形容詞", "m": "規律的；定期的", "theme": "形容詞大集合"}, {"id": 1938, "w": "responsible", "pos": "形容詞", "m": "負責的", "theme": "形容詞大集合"}, {"id": 1939, "w": "right", "pos": "形容詞", "m": "正確的；右邊的", "theme": "形容詞大集合"}, {"id": 1940, "w": "safe", "pos": "形容詞", "m": "安全的", "theme": "形容詞大集合"}, {"id": 1941, "w": "same", "pos": "形容詞", "m": "相同的", "theme": "形容詞大集合"}, {"id": 1942, "w": "scared", "pos": "形容詞", "m": "害怕的", "theme": "形容詞大集合"}, {"id": 1943, "w": "secondary", "pos": "形容詞", "m": "次要的", "theme": "形容詞大集合"}, {"id": 1944, "w": "serious", "pos": "形容詞", "m": "嚴肅的；嚴重的", "theme": "形容詞大集合"}, {"id": 1945, "w": "sharp", "pos": "形容詞", "m": "鋒利的；尖銳的", "theme": "形容詞大集合"}, {"id": 1946, "w": "silent", "pos": "形容詞", "m": "沉默的", "theme": "形容詞大集合"}, {"id": 1947, "w": "similar", "pos": "形容詞", "m": "相似的", "theme": "形容詞大集合"}, {"id": 1948, "w": "single", "pos": "形容詞", "m": "單一的；單身的", "theme": "形容詞大集合"}, {"id": 1949, "w": "skillful", "pos": "形容詞", "m": "熟練的", "theme": "形容詞大集合"}, {"id": 1950, "w": "sleepy", "pos": "形容詞", "m": "想睡的", "theme": "形容詞大集合"}, {"id": 1951, "w": "sorry", "pos": "形容詞", "m": "抱歉的；難過的", "theme": "形容詞大集合"}, {"id": 1952, "w": "special", "pos": "形容詞", "m": "特別的", "theme": "形容詞大集合"}, {"id": 1953, "w": "strange", "pos": "形容詞", "m": "奇怪的", "theme": "形容詞大集合"}, {"id": 1954, "w": "sudden", "pos": "形容詞", "m": "突然的", "theme": "形容詞大集合"}, {"id": 1955, "w": "super", "pos": "形容詞", "m": "超級的", "theme": "形容詞大集合"}, {"id": 1956, "w": "surprised", "pos": "形容詞", "m": "感到驚訝的", "theme": "形容詞大集合"}, {"id": 1957, "w": "terrible", "pos": "形容詞", "m": "糟糕的；可怕的", "theme": "形容詞大集合"}, {"id": 1958, "w": "terrific", "pos": "形容詞", "m": "極好的", "theme": "形容詞大集合"}, {"id": 1959, "w": "thick", "pos": "形容詞", "m": "厚的", "theme": "形容詞大集合"}, {"id": 1960, "w": "tidy", "pos": "形容詞", "m": "整潔的", "theme": "形容詞大集合"}, {"id": 1961, "w": "traditional", "pos": "形容詞", "m": "傳統的", "theme": "形容詞大集合"}, {"id": 1962, "w": "unique", "pos": "形容詞", "m": "獨特的", "theme": "形容詞大集合"}, {"id": 1963, "w": "useful", "pos": "形容詞", "m": "有用的", "theme": "形容詞大集合"}, {"id": 1964, "w": "valuable", "pos": "形容詞", "m": "有價值的", "theme": "形容詞大集合"}, {"id": 1965, "w": "social", "pos": "形容詞", "m": "社會的；社交的", "theme": "形容詞大集合"}, {"id": 1966, "w": "wild", "pos": "形容詞", "m": "野生的；狂野的", "theme": "形容詞大集合"}, {"id": 1967, "w": "wonderful", "pos": "形容詞", "m": "美妙的", "theme": "形容詞大集合"}, {"id": 1968, "w": "wrong", "pos": "形容詞", "m": "錯誤的", "theme": "形容詞大集合"}, {"id": 1969, "w": "always", "pos": "副詞", "m": "總是", "theme": "副詞與連接詞"}, {"id": 1970, "w": "ever", "pos": "副詞", "m": "曾經", "theme": "副詞與連接詞"}, {"id": 1971, "w": "never", "pos": "副詞", "m": "從不", "theme": "副詞與連接詞"}, {"id": 1972, "w": "often", "pos": "副詞", "m": "經常", "theme": "副詞與連接詞"}, {"id": 1973, "w": "seldom", "pos": "副詞", "m": "很少", "theme": "副詞與連接詞"}, {"id": 1974, "w": "sometimes", "pos": "副詞", "m": "有時候", "theme": "副詞與連接詞"}, {"id": 1975, "w": "usually", "pos": "副詞", "m": "通常", "theme": "副詞與連接詞"}, {"id": 1976, "w": "actually", "pos": "副詞", "m": "實際上", "theme": "副詞與連接詞"}, {"id": 1977, "w": "again", "pos": "副詞", "m": "再次", "theme": "副詞與連接詞"}, {"id": 1978, "w": "away", "pos": "副詞", "m": "離開", "theme": "副詞與連接詞"}, {"id": 1979, "w": "almost", "pos": "副詞", "m": "幾乎", "theme": "副詞與連接詞"}, {"id": 1980, "w": "especially", "pos": "副詞", "m": "尤其", "theme": "副詞與連接詞"}, {"id": 1981, "w": "even", "pos": "副詞", "m": "甚至", "theme": "副詞與連接詞"}, {"id": 1982, "w": "finally", "pos": "副詞", "m": "最後", "theme": "副詞與連接詞"}, {"id": 1983, "w": "hardly", "pos": "副詞", "m": "幾乎不", "theme": "副詞與連接詞"}, {"id": 1984, "w": "least", "pos": "副詞", "m": "最少", "theme": "副詞與連接詞"}, {"id": 1985, "w": "really", "pos": "副詞", "m": "真地", "theme": "副詞與連接詞"}, {"id": 1986, "w": "so", "pos": "副詞", "m": "如此；這麼", "theme": "副詞與連接詞"}, {"id": 1987, "w": "still", "pos": "副詞", "m": "仍然", "theme": "副詞與連接詞"}, {"id": 1988, "w": "then", "pos": "副詞", "m": "然後", "theme": "副詞與連接詞"}, {"id": 1989, "w": "together", "pos": "副詞", "m": "一起", "theme": "副詞與連接詞"}, {"id": 1990, "w": "twice", "pos": "副詞", "m": "兩次", "theme": "副詞與連接詞"}, {"id": 1991, "w": "very", "pos": "副詞", "m": "非常", "theme": "副詞與連接詞"}, {"id": 1992, "w": "yet", "pos": "副詞", "m": "尚未；但是", "theme": "副詞與連接詞"}, {"id": 1993, "w": "aloud", "pos": "副詞", "m": "大聲地", "theme": "副詞與連接詞"}, {"id": 1994, "w": "abroad", "pos": "副詞", "m": "在國外", "theme": "副詞與連接詞"}, {"id": 1995, "w": "ahead", "pos": "副詞", "m": "在前面", "theme": "副詞與連接詞"}, {"id": 1996, "w": "everywhere", "pos": "副詞", "m": "到處", "theme": "副詞與連接詞"}, {"id": 1997, "w": "anywhere", "pos": "副詞", "m": "任何地方", "theme": "副詞與連接詞"}, {"id": 1998, "w": "somewhere", "pos": "副詞", "m": "某個地方", "theme": "副詞與連接詞"}, {"id": 1999, "w": "either", "pos": "副詞/連接詞", "m": "也（用於否定句）", "theme": "副詞與連接詞"}, {"id": 2000, "w": "nor", "pos": "連接詞", "m": "也不", "theme": "副詞與連接詞"}];
@@ -233,16 +298,14 @@ const DEFAULT_STATE = () => ({
   currentDay: 0,               // 0-based index into SCHEDULE
   wordStatus: {},              // {wordId: 0=新,1=學習中,2=已熟悉}
   sentences: {},                // {wordId: "使用者造的句子"}
-  aiFeedback: {},                // {wordId: "AI給的批改文字"}
   dayDone: {},                  // {dayIndex: true}
   quizBest: {},                  // {dayIndex: {score,total}}
   storyProgress: {},             // {storyId: {read:bool, quizScore, total, writing:""}}
-  storybookProgress: {},         // {storybookStoryId: {read:bool}} 故事書單字複習標記
-  storybookSentences: {},        // {"storyId_wordIndex": "使用者造的句子"}
-  storybookAiFeedback: {},       // {"storyId_wordIndex": "AI給的批改文字"}
+  storybookProgress: {},         // {storybookStoryId: {read:bool}} 世界故事集複習標記
+  storybookSentences: {},        // {"storyId_wordIndex": "使用者造的句子"}（重點單字造句）
+  storybookRefSentences: {},     // {"storyId_wordIndex": "使用者造的句子"}（參考單字造句）
+  readingSentences: {},          // {"storyId_wordIndex": "使用者造的句子"}（經典故事重點單字造句）
   streakDates: [],               // ["2026-07-13", ...] 只作記錄用，不影響進度
-  apiKey: '',                    // 使用者自己的 Anthropic API 金鑰（僅存於本機/匯出檔案，不會傳給任何第三方）
-  apiModel: 'claude-haiku-4-5',  // 呼叫的模型
   createdAt: new Date().toISOString()
 });
 let STATE = DEFAULT_STATE();
@@ -294,106 +357,286 @@ function buildTranslationToggle(zhContent){
   return wrap;
 }
 
-/* ---------- AI 助教（呼叫使用者自己的 Anthropic API 金鑰） ---------- */
-async function callClaude(userText, systemPrompt){
-  if(!STATE.apiKey){
-    const err = new Error('尚未設定 API 金鑰');
-    err.code = 'NO_KEY';
-    throw err;
-  }
-  const model = STATE.apiModel || 'claude-haiku-4-5';
-  let resp;
+/* ---------- 朗讀（用瀏覽器內建的語音合成，不需要任何 AI 服務或網路連線） ---------- */
+const TTS_RATE_KEY = 'vocabAppTtsRate_v1';
+const TTS_VOICE_KEY = 'vocabAppTtsVoiceURI_v1';
+function getTtsRate(){
+  try{ const v = parseFloat(localStorage.getItem(TTS_RATE_KEY)); return isNaN(v) ? 0.85 : v; }catch(e){ return 0.85; }
+}
+function setTtsRate(r){
+  try{ localStorage.setItem(TTS_RATE_KEY, String(r)); }catch(e){}
+}
+function getTtsVoiceURI(){
+  try{ return localStorage.getItem(TTS_VOICE_KEY)||''; }catch(e){ return ''; }
+}
+function setTtsVoiceURI(uri){
+  try{ if(uri) localStorage.setItem(TTS_VOICE_KEY, uri); else localStorage.removeItem(TTS_VOICE_KEY); }catch(e){}
+}
+function getTtsVoice(){
   try{
-    resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': STATE.apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: model,
-        max_tokens: 600,
-        system: systemPrompt,
-        messages: [{role:'user', content: userText}]
-      })
-    });
-  }catch(networkErr){
-    const err = new Error('網路連線失敗，請確認手機/裝置已連上網路');
-    err.code = 'NETWORK';
-    throw err;
-  }
-  if(!resp.ok){
-    let detail = '';
-    try{ const j = await resp.json(); detail = (j && j.error && j.error.message) || ''; }catch(e){}
-    const err = new Error(`AI 助教連線失敗（HTTP ${resp.status}）${detail ? '：'+detail : ''}`);
-    err.code = 'HTTP_'+resp.status;
-    throw err;
-  }
-  const data = await resp.json();
-  const text = (data.content||[]).map(c=>c.text||'').join('').trim();
-  return text || '（AI 沒有回覆內容，請再試一次）';
+    const uri = getTtsVoiceURI();
+    if(!uri || !('speechSynthesis' in window)) return null;
+    return window.speechSynthesis.getVoices().find(v=>v.voiceURI===uri) || null;
+  }catch(e){ return null; }
 }
 
-function aiUnavailableNode(){
-  const box = el('div',{class:'ai-box ai-warn'});
-  box.appendChild(el('p',{},['⚠️ 尚未設定 AI 助教的 API 金鑰。']));
-  box.appendChild(el('button',{class:'btn small', onclick:()=>{location.hash='#guide';}},['前往設定 →']));
-  return box;
+let activeSpeakBtn = null;
+function setSpeakBtnPlaying(btn, playing){
+  if(!btn) return;
+  btn.classList.toggle('playing', playing);
+  btn.textContent = playing ? '⏹' : '🔊';
 }
-
-// Builds a small "ask the AI about this story" widget. contextText is the story
-// content (plain text) given to the model as background for its answers.
-function buildStoryQABox(contextText){
-  const wrap = el('div',{class:'card'});
-  wrap.appendChild(el('h3',{},['🤖 問 AI 老師']));
-  wrap.appendChild(el('p',{class:'muted'},['看不懂的單字、句子，或想知道故事更多細節，都可以直接問！']));
-  const input = el('input',{type:'text', class:'input-text', style:'width:100%;', placeholder:'例如：這句話是什麼意思？'});
-  const resultBox = el('div',{});
-  wrap.appendChild(input);
-  wrap.appendChild(el('button',{class:'btn small', style:'margin-top:8px', onclick: async ()=>{
-    const q = input.value.trim();
-    if(!q){ return; }
-    if(!STATE.apiKey){ resultBox.innerHTML=''; resultBox.appendChild(aiUnavailableNode()); return; }
-    resultBox.innerHTML = '';
-    resultBox.appendChild(el('div',{class:'ai-box ai-loading'},['🤖 思考中...']));
-    try{
-      const sys = '你是一位親切耐心的台灣國中英文老師，正在幫學生理解一篇英文短文或故事。請根據提供的短文內容，用繁體中文簡短清楚地回答學生的問題，適合手機閱讀，不要長篇大論。';
-      const userMsg = `短文內容：\n${contextText}\n\n學生的問題：${q}`;
-      const reply = await callClaude(userMsg, sys);
-      resultBox.innerHTML = '';
-      resultBox.appendChild(el('div',{class:'ai-box'},['🤖 '+reply]));
-    }catch(e){
-      resultBox.innerHTML = '';
-      resultBox.appendChild(el('div',{class:'ai-box ai-warn'},['❌ '+(e.message||'AI 助教發生錯誤，請稍後再試。')]));
+function speakText(text, opts, btn){
+  opts = opts || {};
+  if(!('speechSynthesis' in window)){
+    alert('抱歉，這個瀏覽器不支援語音朗讀功能，建議換成 Chrome、Edge 或 Safari 最新版試試看。');
+    return;
+  }
+  try{
+    window.speechSynthesis.cancel(); // 先停掉正在念的內容，避免疊在一起
+    if(activeSpeakBtn) setSpeakBtnPlaying(activeSpeakBtn, false);
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = opts.lang || 'en-US';
+    utter.rate = getTtsRate();
+    const voice = getTtsVoice();
+    if(voice) utter.voice = voice;
+    const clearActive = ()=>{ setSpeakBtnPlaying(btn, false); if(activeSpeakBtn===btn) activeSpeakBtn=null; };
+    utter.onend = clearActive;
+    utter.onerror = clearActive;
+    activeSpeakBtn = btn;
+    setSpeakBtnPlaying(btn, true);
+    window.speechSynthesis.speak(utter);
+  }catch(e){ setSpeakBtnPlaying(btn, false); }
+}
+function stopSpeaking(){
+  try{ if('speechSynthesis' in window) window.speechSynthesis.cancel(); }catch(e){}
+  if(activeSpeakBtn){ setSpeakBtnPlaying(activeSpeakBtn, false); activeSpeakBtn=null; }
+}
+// 去除 **粗體** 標記與多餘符號，取得純英文朗讀用文字。
+function plainTextFor(text){
+  return (text||'').replace(/\*\*(.+?)\*\*/g, '$1');
+}
+// 小小的喇叭按鈕：點一下開始朗讀，朗讀中再點一次（按鈕會變成 ⏹）就停止。
+function buildSpeakBtn(text, opts){
+  opts = opts || {};
+  const btn = el('button',{class:'speak-btn'+(opts.small?' small':''), title:'朗讀（再點一次可停止）'},['🔊']);
+  btn.addEventListener('click', (e)=>{
+    if(e) e.stopPropagation();
+    if(btn.classList.contains('playing')){
+      stopSpeaking();
+    } else {
+      speakText(text, opts, btn);
     }
-  }},['送出問題']));
-  wrap.appendChild(resultBox);
-  return wrap;
+  });
+  return btn;
+}
+// 填入語音選單（只列出英文語音），並套用之前儲存的選擇。語音清單常常是非同步載入的，
+// 所以除了頁面載入時呼叫一次，也要監聽 voiceschanged 事件再填一次。
+function populateVoiceSelect(){
+  const sel = document.getElementById('ttsVoiceSelect');
+  if(!sel || !('speechSynthesis' in window)) return;
+  const voices = window.speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
+  if(!voices.length) return;
+  const current = getTtsVoiceURI();
+  sel.innerHTML = '';
+  sel.appendChild(el('option',{value:''},['系統預設']));
+  voices.forEach(v=>{
+    const opt = el('option',{value:v.voiceURI},[v.name+'（'+v.lang+'）']);
+    if(v.voiceURI===current) opt.setAttribute('selected','selected');
+    sel.appendChild(opt);
+  });
+}
+function initTtsControls(){
+  const rateSel = document.getElementById('ttsRateSelect');
+  const voiceSel = document.getElementById('ttsVoiceSelect');
+  const stopBtn = document.getElementById('ttsStopBtn');
+  if(rateSel){
+    rateSel.value = String(getTtsRate());
+    rateSel.addEventListener('change', ()=>{ setTtsRate(parseFloat(rateSel.value)||0.85); });
+  }
+  if(voiceSel){
+    voiceSel.addEventListener('change', ()=>{ setTtsVoiceURI(voiceSel.value); });
+  }
+  if(stopBtn){
+    stopBtn.addEventListener('click', ()=> stopSpeaking());
+  }
+  if('speechSynthesis' in window){
+    populateVoiceSelect();
+    window.speechSynthesis.addEventListener('voiceschanged', populateVoiceSelect);
+  }
+}
+
+/* ---------- 複製到剪貼簿（給「造句練習」用來自己貼去問 AI，本系統不直接呼叫任何 AI API） ---------- */
+function copyToClipboard(text, done){
+  function fallback(){
+    let ok = false;
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      ta.style.top = '0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+    }catch(e){ ok = false; }
+    done(ok);
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>done(true)).catch(fallback);
+  } else {
+    fallback();
+  }
+}
+
+// Builds a compact "造句練習" widget for one word: pattern hint + textarea (auto-saved
+// into `store[key]`) + a "複製，貼去問 AI" button that copies a ready-to-paste grading
+// request to the clipboard, so the user can paste it into any AI chat site themselves.
+function buildSentenceWidget(w, store, key, opts){
+  opts = opts || {};
+  const pat = posPattern(w.pos);
+  const card = el('div',{class:'card'});
+  const meta = w.pos ? (' ('+w.pos+') '+w.m) : (' － '+w.m);
+  card.appendChild(el('div',{class:'row space-between'},[
+    el('div',{},[el('span',{class:'en big'},[w.w]), el('span',{class:'muted'},[meta])]),
+    buildSpeakBtn(w.w, {small:true}),
+  ]));
+  card.appendChild(el('div',{class:'hint'},[pat.tip]));
+  if(opts.showPatternList){
+    const patList = el('ul',{class:'pattern-list'});
+    pat.patterns.forEach(p=> patList.appendChild(el('li',{},[p])));
+    card.appendChild(patList);
+  }
+  const ta = el('textarea',{class:'sentence-input', placeholder:'請用「'+w.w+'」寫一個完整的英文句子...', rows:'2'});
+  ta.value = store[key]||'';
+  ta.addEventListener('input', ()=>{ store[key]=ta.value; scheduleCloudSave(); });
+  card.appendChild(ta);
+
+  const statusMsg = el('p',{class:'muted small', style:'margin:6px 0 0;'},['']);
+  const preview = el('div',{class:'ai-box', style:'display:none;'});
+  card.appendChild(el('button',{class:'btn small', style:'margin-top:8px', onclick:()=>{
+    if(!ta.value.trim()){ alert('請先寫一個句子，才能複製提問內容喔！'); return; }
+    const promptText = `請幫我看看這句英文的文法對不對：\n\n單字：${w.w}（${w.pos}，意思：${w.m}）\n句子：「${ta.value.trim()}」\n\n如果有錯，請給我修改後的正確版本，並簡單說明為什麼要這樣改；如果本來就正確，也請給我一個更道地的說法參考。`;
+    copyToClipboard(promptText, (ok)=>{
+      statusMsg.textContent = ok ? '✅ 已複製！可以貼到 Claude.ai 或其他 AI 聊天視窗詢問。' : '⚠️ 自動複製失敗，請手動選取下方文字複製。';
+      statusMsg.className = ok ? 'good small' : 'bad small';
+      preview.textContent = promptText;
+      preview.style.display = 'block';
+    });
+  }},['📋 複製，貼去問 AI']));
+  card.appendChild(statusMsg);
+  card.appendChild(preview);
+  return card;
+}
+
+/* ---------- 雲端同步（選用：透過 Google Apps Script 網頁應用程式存到 Google 試算表） ---------- */
+// 這個系統本身沒有後端，預設進度只存在記憶體裡（重新整理就消失）。
+// 使用者可以在「使用說明」頁貼上自己部署的 Apps Script 網頁應用程式網址，
+// 之後每次操作系統就會自動（debounce）把整個 STATE 存成 JSON 存進試算表；
+// 開啟頁面時也會先嘗試從試算表讀回最新進度。網址本身存在 localStorage（僅存在使用者自己的瀏覽器裡）。
+const SHEET_URL_KEY = 'vocabAppSheetUrl_v1';
+function getSheetUrl(){
+  try{ return (localStorage.getItem(SHEET_URL_KEY)||'').trim(); }catch(e){ return ''; }
+}
+function setSheetUrl(url){
+  try{
+    if(url) localStorage.setItem(SHEET_URL_KEY, url);
+    else localStorage.removeItem(SHEET_URL_KEY);
+  }catch(e){ /* 私密瀏覽模式等情況下 localStorage 可能無法使用，安靜失敗即可 */ }
+}
+
+let cloudSyncState = {status:'idle', text:'☁️ 尚未設定雲端同步'};
+function setCloudSyncState(status, text){
+  cloudSyncState = {status, text};
+  const indEl = document.getElementById('cloudSyncIndicator');
+  if(indEl){
+    indEl.textContent = text;
+    indEl.className = 'sync-indicator sync-'+status;
+  }
+  const guideEl = document.getElementById('cloudSyncGuideStatus');
+  if(guideEl){
+    guideEl.textContent = text;
+    guideEl.className = (status==='error' ? 'bad small' : (status==='success' ? 'good small' : 'muted small'));
+  }
+}
+
+let cloudSaveTimer = null;
+function scheduleCloudSave(){
+  const url = getSheetUrl();
+  if(!url) return; // 沒設定雲端同步，什麼都不做
+  setCloudSyncState('pending', '☁️ 已變更，準備同步…');
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(()=>{ cloudSaveTimer=null; saveToCloud(url); }, 1500);
+}
+
+function saveToCloud(url, opts){
+  opts = opts || {};
+  setCloudSyncState('saving', '☁️ 同步中…');
+  return fetch(url, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'}, // 避免瀏覽器送出 CORS 預檢請求，Apps Script 才收得到
+    body: JSON.stringify(STATE),
+    keepalive: !!opts.keepalive
+  }).then(res=>{
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return res.text();
+  }).then(()=>{
+    setCloudSyncState('success', '☁️ 已同步雲端資料庫');
+  }).catch(()=>{
+    setCloudSyncState('error', '⚠️ 同步失敗，請檢查網路連線或網址設定（下次操作會自動重試）');
+  });
+}
+
+function loadFromCloud(url){
+  setCloudSyncState('pending', '☁️ 正在從雲端載入進度…');
+  return fetch(url).then(res=>{
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return res.text();
+  }).then(text=>{
+    text = (text||'').trim();
+    if(!text){
+      setCloudSyncState('idle', '☁️ 雲端試算表目前是空的，將從新進度開始');
+      return false;
+    }
+    let data;
+    try{ data = JSON.parse(text); }catch(e){ throw new Error('bad json'); }
+    if(data && typeof data==='object' && data.version){
+      STATE = Object.assign(DEFAULT_STATE(), data);
+      setCloudSyncState('success', '☁️ 已同步雲端資料庫');
+      return true;
+    }
+    setCloudSyncState('idle', '☁️ 雲端試算表目前是空的，將從新進度開始');
+    return false;
+  }).catch(()=>{
+    setCloudSyncState('error', '⚠️ 無法連線到雲端試算表，請檢查網址是否正確');
+    return false;
+  });
 }
 
 /* ---------- Router / 畫面渲染 ---------- */
 const TABS = [
-  {id:'vocab', label:'每日故事'},
-  {id:'sentence', label:'造句練習'},
+  {id:'storybook', label:'世界故事集'},
   {id:'reading', label:'經典故事'},
-  {id:'storybook', label:'故事書單字'},
+  {id:'vocab', label:'每日故事'},
   {id:'guide', label:'使用說明'}
 ];
 
+let skipNextAutoSave = false;
 function render(){
-  const hash = (location.hash||'#vocab').replace('#','');
+  stopSpeaking();
+  const hash = (location.hash||'#storybook').replace('#','');
   const root = $('#view');
   root.innerHTML = '';
   $all('.tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.tab===hash));
   switch(hash){
-    case 'sentence': renderSentence(root); break;
     case 'reading': renderReading(root); break;
     case 'storybook': renderStorybook(root); break;
     case 'guide': renderGuide(root); break;
     default: renderVocab(root);
   }
+  if(skipNextAutoSave){ skipNextAutoSave = false; }
+  else { scheduleCloudSave(); }
 }
 function themesOf(words){ const s = new Set(words.map(w=>w.theme)); return Array.from(s).join('、'); }
 
@@ -433,14 +676,17 @@ function renderVocab(root){
 
   const words = day.words;
   if(words.length===0){
-    root.appendChild(el('div',{class:'card'},[el('p',{},['本階段沒有安排新單字，太棒了！可以到「經典故事」或「故事書單字」自由複習閱讀。'])]));
+    root.appendChild(el('div',{class:'card'},[el('p',{},['本階段沒有安排新單字，太棒了！可以到「經典故事」或「世界故事集」自由複習閱讀。'])]));
     return;
   }
 
   if(day.type==='vocab' && day.dailyStory){
     const storyCard = el('div',{class:'card highlight'});
-    storyCard.appendChild(el('h3',{},['📖 今日短文．'+day.dailyStory.title_zh]));
-    storyCard.appendChild(el('p',{class:'muted'},['先讀完這篇短文，看看今天的 13 個新單字（螢光標記處）怎麼被用在句子裡，再往下做單字卡和測驗。']));
+    storyCard.appendChild(el('div',{class:'row space-between'},[
+      el('h3',{},['📖 今日短文．'+day.dailyStory.title_zh]),
+      buildSpeakBtn(plainTextFor(day.dailyStory.text)),
+    ]));
+    storyCard.appendChild(el('p',{class:'muted'},['先讀完這篇短文，看看今天的 13 個新單字（螢光標記處）怎麼被用在句子裡，再往下做單字卡和測驗；按上面的 🔊 可以請瀏覽器唸出整篇故事。']));
     const p = el('p',{class:'story-p'});
     p.innerHTML = renderStoryHtml(day.dailyStory.text);
     storyCard.appendChild(p);
@@ -448,7 +694,6 @@ function renderVocab(root){
       storyCard.appendChild(buildTranslationToggle(day.dailyStory.text_zh));
     }
     root.appendChild(storyCard);
-    root.appendChild(buildStoryQABox(day.dailyStory.text));
   }
 
   flashIndex = Math.min(flashIndex, words.length-1);
@@ -456,7 +701,7 @@ function renderVocab(root){
   card.appendChild(el('h3',{},['單字卡複習　'+(flashIndex+1)+' / '+words.length]));
   const w = words[flashIndex];
   const flash = el('div',{class:'flashcard'+(flashFlipped?' flipped':'')});
-  flash.appendChild(el('div',{class:'flash-front'},[el('div',{class:'fw'},[w.w]), el('div',{class:'fpos'},[w.pos])]));
+  flash.appendChild(el('div',{class:'flash-front'},[el('div',{class:'fw'},[w.w]), el('div',{class:'fpos'},[w.pos]), buildSpeakBtn(w.w)]));
   flash.appendChild(el('div',{class:'flash-back'},[el('div',{class:'fm'},[w.m]), el('div',{class:'fpos'},[w.theme])]));
   flash.addEventListener('click', ()=>{ flashFlipped=!flashFlipped; render(); });
   card.appendChild(flash);
@@ -472,7 +717,7 @@ function renderVocab(root){
   const list = el('div',{class:'card'});
   list.appendChild(el('h3',{},['今日單字清單']));
   const table = el('table',{class:'vocab-table'});
-  table.appendChild(el('tr',{},[el('th',{},['英文']), el('th',{},['詞性']), el('th',{},['中文意思']), el('th',{},['熟悉度'])]));
+  table.appendChild(el('tr',{},[el('th',{},['英文']), el('th',{},['詞性']), el('th',{},['中文意思']), el('th',{},['熟悉度']), el('th',{},['朗讀'])]));
   words.forEach(wd=>{
     const s = STATE.wordStatus[wd.id]||0;
     const statusLabel = s===2?'✅ 已熟悉':(s===1?'🟡 學習中':'⚪ 新字');
@@ -480,11 +725,21 @@ function renderVocab(root){
       el('td',{class:'en'},[wd.w]),
       el('td',{},[wd.pos]),
       el('td',{},[wd.m]),
-      el('td',{},[statusLabel])
+      el('td',{},[statusLabel]),
+      el('td',{},[buildSpeakBtn(wd.w, {small:true})])
     ]));
   });
   list.appendChild(table);
   root.appendChild(list);
+
+  // 造句練習（每個單字一個小卡：句型提示＋造句欄＋複製提問文字）
+  const sentenceWrap = el('div',{class:'card'});
+  sentenceWrap.appendChild(el('h3',{},['✍️ 造句練習']));
+  sentenceWrap.appendChild(el('p',{class:'muted'},['每個單字先看句型提示，再自己寫一句完整的英文句子；寫完可以複製提問文字，貼去問 AI。']));
+  root.appendChild(sentenceWrap);
+  words.forEach(w=>{
+    root.appendChild(buildSentenceWidget(w, STATE.sentences, w.id, {showPatternList:true}));
+  });
 
   // Quiz
   root.appendChild(buildQuizCard(day));
@@ -538,59 +793,6 @@ function buildQuizCard(day){
   return card;
 }
 
-/* ---------- Sentence Practice ---------- */
-function renderSentence(root){
-  const day = SCHEDULE[STATE.currentDay];
-  root.appendChild(el('div',{class:'card'},[
-    el('h2',{},['✍️ 造句練習 － '+day.label]),
-    el('p',{class:'muted'},['每個單字先看句型提示，再自己寫一句完整的英文句子。設定好 AI 助教（見上方分頁）後，可以直接按「請 AI 老師批改」即時得到回饋！'])
-  ]));
-  const words = day.words;
-  if(words.length===0){
-    root.appendChild(el('div',{class:'card'},[el('p',{},['本階段沒有新單字，歡迎到「經典故事」或「故事書單字」挑幾個舊單字來練習造句！'])]));
-    return;
-  }
-  words.forEach(w=>{
-    const pat = posPattern(w.pos);
-    const card = el('div',{class:'card'});
-    card.appendChild(el('div',{class:'row space-between'},[
-      el('div',{},[el('span',{class:'en big'},[w.w]), el('span',{class:'muted'},[' ('+w.pos+') '+w.m])]),
-    ]));
-    card.appendChild(el('div',{class:'hint'},[pat.tip]));
-    const patList = el('ul',{class:'pattern-list'});
-    pat.patterns.forEach(p=> patList.appendChild(el('li',{},[p])));
-    card.appendChild(patList);
-    const ta = el('textarea',{class:'sentence-input', placeholder:'請用「'+w.w+'」寫一個完整的英文句子...', rows:'2'});
-    ta.value = STATE.sentences[w.id]||'';
-    ta.addEventListener('input', ()=>{ STATE.sentences[w.id]=ta.value; });
-    card.appendChild(ta);
-
-    const feedbackBox = el('div',{});
-    if(STATE.aiFeedback[w.id]){
-      feedbackBox.appendChild(el('div',{class:'ai-box'},['🤖 '+STATE.aiFeedback[w.id]]));
-    }
-    card.appendChild(el('button',{class:'btn small', style:'margin-top:8px', onclick: async ()=>{
-      if(!ta.value.trim()){ alert('請先寫一個句子再送出批改喔！'); return; }
-      if(!STATE.apiKey){ feedbackBox.innerHTML=''; feedbackBox.appendChild(aiUnavailableNode()); return; }
-      feedbackBox.innerHTML = '';
-      feedbackBox.appendChild(el('div',{class:'ai-box ai-loading'},['🤖 AI 老師檢查中...']));
-      try{
-        const sys = '你是一位親切耐心的台灣國中英文老師。學生會給你一個目標單字和他們寫的英文句子。請用繁體中文簡短回覆（適合手機閱讀，不要長篇大論），內容包含：1) 這句英文文法對不對；2) 如果有錯，給出修改後的正確版本；3) 用一兩句話說明為什麼要這樣改。如果句子本來就正確，就稱讚他，可以額外給一個更道地的說法當作參考。';
-        const userMsg = `目標單字：${w.w}（${w.pos}，意思：${w.m}）\n學生造的句子：${ta.value.trim()}`;
-        const reply = await callClaude(userMsg, sys);
-        STATE.aiFeedback[w.id] = reply;
-        feedbackBox.innerHTML = '';
-        feedbackBox.appendChild(el('div',{class:'ai-box'},['🤖 '+reply]));
-      }catch(e){
-        feedbackBox.innerHTML = '';
-        feedbackBox.appendChild(el('div',{class:'ai-box ai-warn'},['❌ '+(e.message||'AI 助教發生錯誤，請稍後再試。')]));
-      }
-    }},['🤖 請 AI 老師批改']));
-    card.appendChild(feedbackBox);
-    root.appendChild(card);
-  });
-}
-
 /* ---------- Reading ---------- */
 let openStoryId = null;
 function openStory(id){ openStoryId = id; }
@@ -615,22 +817,34 @@ function renderReading(root){
   }
   const s = STORIES.find(x=>x.id===openStoryId);
   root.appendChild(el('button',{class:'btn small', onclick:()=>{openStoryId=null; render();}},['← 回故事列表']));
+
   const card = el('div',{class:'card'});
-  card.appendChild(el('h2',{},[s.title_en]));
-  card.appendChild(el('p',{class:'muted'},[s.title_zh+'　'+s.level+'　約 '+s.words+' 字']));
+  card.appendChild(el('div',{class:'row space-between'},[
+    el('h2',{},[s.title_en]),
+    buildSpeakBtn(s.text.join(' ')),
+  ]));
+  card.appendChild(el('p',{class:'muted'},[s.title_zh+'　'+s.level+'　約 '+s.words+' 字　｜　按上面的 🔊 可以請瀏覽器唸出整篇故事']));
   s.text.forEach(p=> card.appendChild(el('p',{class:'story-p'},[p])));
   if(s.text_zh){
     card.appendChild(buildTranslationToggle(s.text_zh));
   }
   root.appendChild(card);
-  root.appendChild(buildStoryQABox(s.text.join('\n\n')));
 
   const vocabCard = el('div',{class:'card'});
   vocabCard.appendChild(el('h3',{},['📌 重點單字']));
   const vGrid = el('div',{class:'vocab-tags'});
-  s.newWords.forEach(v=> vGrid.appendChild(el('span',{class:'tag'},[v.en+' － '+v.zh])));
+  s.newWords.forEach(v=> vGrid.appendChild(el('span',{class:'tag'},[v.en+' － '+v.zh+' ', buildSpeakBtn(v.en, {small:true})])));
   vocabCard.appendChild(vGrid);
   root.appendChild(vocabCard);
+
+  const sentenceWrap = el('div',{class:'card'});
+  sentenceWrap.appendChild(el('h3',{},['✍️ 造句練習']));
+  sentenceWrap.appendChild(el('p',{class:'muted'},['挑幾個這篇故事的重點單字，練習自己寫一句完整的英文句子；寫完可以複製提問文字，貼去問 AI。']));
+  root.appendChild(sentenceWrap);
+  s.newWords.forEach((v, idx)=>{
+    const key = s.id+'_'+idx;
+    root.appendChild(buildSentenceWidget({w:v.en, pos:'', m:v.zh}, STATE.readingSentences, key));
+  });
 
   const quizCard = el('div',{class:'card'});
   quizCard.appendChild(el('h3',{},['📝 閱讀理解測驗']));
@@ -669,7 +883,7 @@ function renderReading(root){
   const ta = el('textarea',{class:'sentence-input', rows:'3', placeholder:'寫下你的句子...'});
   const prog0 = STATE.storyProgress[s.id]||{};
   ta.value = prog0.writing||'';
-  ta.addEventListener('input', ()=>{ const p=STATE.storyProgress[s.id]||{}; p.writing=ta.value; STATE.storyProgress[s.id]=p; });
+  ta.addEventListener('input', ()=>{ const p=STATE.storyProgress[s.id]||{}; p.writing=ta.value; STATE.storyProgress[s.id]=p; scheduleCloudSave(); });
   writeCard.appendChild(ta);
   writeCard.appendChild(el('button',{class:'btn', onclick:()=>{ const p=STATE.storyProgress[s.id]||{}; p.read=true; STATE.storyProgress[s.id]=p; render(); }},['標記已讀完這篇 ✅']));
   root.appendChild(writeCard);
@@ -683,7 +897,7 @@ let sbFlashFlipped = false;
 function renderStorybook(root){
   if(storybookOpenId==null){
     root.appendChild(el('div',{class:'card'},[
-      el('h2',{},['📗 故事書單字（世界經典英文故事集）']),
+      el('h2',{},['📗 世界故事集']),
       el('p',{class:'muted'},['這裡是另一套延伸閱讀：取材自你另一本《國中生必讀世界經典英文故事集》全書 42 篇故事的主題與重點單字，改寫成適合國中程度的原創短篇故事＋中文翻譯，並整理出對應的單字表（單字、詞性、中文意思）。這裡的故事內文和翻譯都是重新原創撰寫，並非原書的文字或翻譯；如果想看原書的完整內容、課本練習題與官方翻譯，還是要翻閱你自己的書。']),
       el('p',{class:'muted'},['這是「新」的學習選項，和原本的「每日故事」「經典故事」是各自獨立、並存的內容，不會互相取代或影響彼此的進度。'])
     ]));
@@ -712,7 +926,10 @@ function renderStorybook(root){
 
   if(s.text && s.text.length){
     const storyCard = el('div',{class:'card highlight'});
-    storyCard.appendChild(el('h3',{},['📖 故事（螢光標記處為本課重點單字）']));
+    storyCard.appendChild(el('div',{class:'row space-between'},[
+      el('h3',{},['📖 故事（螢光標記處為本課重點單字）']),
+      buildSpeakBtn(plainTextFor(s.text.join(' '))),
+    ]));
     s.text.forEach(p=>{
       const pEl = el('p',{class:'story-p'});
       pEl.innerHTML = renderStoryHtml(p);
@@ -722,7 +939,6 @@ function renderStorybook(root){
       storyCard.appendChild(buildTranslationToggle(s.text_zh));
     }
     root.appendChild(storyCard);
-    root.appendChild(buildStoryQABox(s.text.join('\n\n')));
   }
 
   if(s.words.length){
@@ -731,7 +947,7 @@ function renderStorybook(root){
     card.appendChild(el('h3',{},['單字卡　'+(sbFlashIndex+1)+' / '+s.words.length]));
     const w = s.words[sbFlashIndex];
     const flash = el('div',{class:'flashcard'+(sbFlashFlipped?' flipped':'')});
-    flash.appendChild(el('div',{class:'flash-front'},[el('div',{class:'fw'},[w.w]), el('div',{class:'fpos'},[w.pos])]));
+    flash.appendChild(el('div',{class:'flash-front'},[el('div',{class:'fw'},[w.w]), el('div',{class:'fpos'},[w.pos]), buildSpeakBtn(w.w)]));
     flash.appendChild(el('div',{class:'flash-back'},[el('div',{class:'fm'},[w.m])]));
     flash.addEventListener('click', ()=>{ sbFlashFlipped=!sbFlashFlipped; render(); });
     card.appendChild(flash);
@@ -745,9 +961,9 @@ function renderStorybook(root){
   const listCard = el('div',{class:'card'});
   listCard.appendChild(el('h3',{},['📌 重點單字']));
   const table = el('table',{class:'vocab-table'});
-  table.appendChild(el('tr',{},[el('th',{},['英文']), el('th',{},['詞性']), el('th',{},['中文意思'])]));
+  table.appendChild(el('tr',{},[el('th',{},['英文']), el('th',{},['詞性']), el('th',{},['中文意思']), el('th',{},['朗讀'])]));
   s.words.forEach(w=>{
-    table.appendChild(el('tr',{},[el('td',{class:'en'},[w.w]), el('td',{},[w.pos]), el('td',{},[w.m])]));
+    table.appendChild(el('tr',{},[el('td',{class:'en'},[w.w]), el('td',{},[w.pos]), el('td',{},[w.m]), el('td',{},[buildSpeakBtn(w.w, {small:true})])]));
   });
   listCard.appendChild(table);
   root.appendChild(listCard);
@@ -759,9 +975,18 @@ function renderStorybook(root){
     refCard.appendChild(el('h3',{},['🔖 參考單字']));
     refCard.appendChild(el('p',{class:'muted'},['書中額外補充的詞彙，非本課要求熟記的重點單字。']));
     const rGrid = el('div',{class:'vocab-tags'});
-    s.reference_words.forEach(w=> rGrid.appendChild(el('span',{class:'tag'},[w.w+' － '+w.m])));
+    s.reference_words.forEach(w=> rGrid.appendChild(el('span',{class:'tag'},[w.w+' － '+w.m+' ', buildSpeakBtn(w.w, {small:true})])));
     refCard.appendChild(rGrid);
     root.appendChild(refCard);
+
+    const refSentenceWrap = el('div',{class:'card'});
+    refSentenceWrap.appendChild(el('h3',{},['✍️ 參考單字造句練習']));
+    refSentenceWrap.appendChild(el('p',{class:'muted'},['參考單字也可以練習造句，寫完一樣可以複製提問文字，貼去問 AI。']));
+    root.appendChild(refSentenceWrap);
+    s.reference_words.forEach((w, idx)=>{
+      const key = s.id+'_ref_'+idx;
+      root.appendChild(buildSentenceWidget(w, STATE.storybookRefSentences, key));
+    });
   }
 
   const doneCard = el('div',{class:'card center'});
@@ -776,137 +1001,101 @@ function renderStorybook(root){
 }
 
 // Builds a "造句練習" card for a storybook story: one compact widget per core word,
-// with a sentence pattern hint, textarea, and an optional "請 AI 老師批改" button.
+// with a sentence pattern hint, textarea, and a "複製，貼去問 AI" button.
 function buildStorybookSentenceCard(s){
   const wrap = el('div',{class:'card'});
   wrap.appendChild(el('h3',{},['✍️ 造句練習']));
-  wrap.appendChild(el('p',{class:'muted'},['挑幾個這篇故事的重點單字，練習自己寫一句完整的英文句子；設定好 AI 助教後，可以請 AI 老師即時批改。']));
+  wrap.appendChild(el('p',{class:'muted'},['挑幾個這篇故事的重點單字，練習自己寫一句完整的英文句子；寫完可以複製提問文字，貼去問 AI。']));
   s.words.forEach((w, idx)=>{
     const key = s.id+'_'+idx;
-    const pat = posPattern(w.pos);
-    const card = el('div',{class:'card'});
-    card.appendChild(el('div',{class:'row space-between'},[
-      el('div',{},[el('span',{class:'en big'},[w.w]), el('span',{class:'muted'},[' ('+w.pos+') '+w.m])]),
-    ]));
-    card.appendChild(el('div',{class:'hint'},[pat.tip]));
-    const ta = el('textarea',{class:'sentence-input', placeholder:'請用「'+w.w+'」寫一個完整的英文句子...', rows:'2'});
-    ta.value = STATE.storybookSentences[key]||'';
-    ta.addEventListener('input', ()=>{ STATE.storybookSentences[key]=ta.value; });
-    card.appendChild(ta);
-
-    const feedbackBox = el('div',{});
-    if(STATE.storybookAiFeedback[key]){
-      feedbackBox.appendChild(el('div',{class:'ai-box'},['🤖 '+STATE.storybookAiFeedback[key]]));
-    }
-    card.appendChild(el('button',{class:'btn small', style:'margin-top:8px', onclick: async ()=>{
-      if(!ta.value.trim()){ alert('請先寫一個句子再送出批改喔！'); return; }
-      if(!STATE.apiKey){ feedbackBox.innerHTML=''; feedbackBox.appendChild(aiUnavailableNode()); return; }
-      feedbackBox.innerHTML = '';
-      feedbackBox.appendChild(el('div',{class:'ai-box ai-loading'},['🤖 AI 老師檢查中...']));
-      try{
-        const sys = '你是一位親切耐心的台灣國中英文老師。學生會給你一個目標單字和他們寫的英文句子。請用繁體中文簡短回覆（適合手機閱讀，不要長篇大論），內容包含：1) 這句英文文法對不對；2) 如果有錯，給出修改後的正確版本；3) 用一兩句話說明為什麼要這樣改。如果句子本來就正確，就稱讚他，可以額外給一個更道地的說法當作參考。';
-        const userMsg = `目標單字：${w.w}（${w.pos}，意思：${w.m}）\n學生造的句子：${ta.value.trim()}`;
-        const reply = await callClaude(userMsg, sys);
-        STATE.storybookAiFeedback[key] = reply;
-        feedbackBox.innerHTML = '';
-        feedbackBox.appendChild(el('div',{class:'ai-box'},['🤖 '+reply]));
-      }catch(e){
-        feedbackBox.innerHTML = '';
-        feedbackBox.appendChild(el('div',{class:'ai-box ai-warn'},['❌ '+(e.message||'AI 助教發生錯誤，請稍後再試。')]));
-      }
-    }},['🤖 請 AI 老師批改']));
-    card.appendChild(feedbackBox);
-    wrap.appendChild(card);
+    wrap.appendChild(buildSentenceWidget(w, STATE.storybookSentences, key));
   });
   return wrap;
 }
 
-/* ---------- Guide（含 AI 助教設定，已併入本頁最下方） ---------- */
+/* ---------- Guide ---------- */
 function renderGuide(root){
   root.appendChild(el('div',{class:'card'},[
     el('h2',{},['📘 使用說明']),
     el('h3',{},['系統架構：用故事記單字']),
     el('p',{},['這套系統把「國中單字王 2000 單字題庫表」整理成 26 週（約 6 個月）的學習計畫，並用「故事情境」取代死背單字卡：每週一到週六，每天都有一篇專門為當天 13 個新單字寫的短文——這些單字在文中會用螢光標記出來，讓你先看懂單字在句子裡怎麼被使用，再進入單字卡與測驗鞏固記憶。週日則是複習日，複習本週單字並閱讀一篇經典故事（伊索寓言、格林童話、安徒生童話改寫），做延伸練習。']),
-    el('h3',{},['四大學習功能']),
+    el('h3',{},['三大學習分頁']),
     el('ul',{class:'pattern-list'},[
-      el('li',{},['「每日故事」：先讀一篇用今天 13 個新字寫成的短文（新字會用螢光標記），再用單字卡（正面英文、反面中文）＋小測驗鞏固記憶；文章下方有「🀄 顯示中文翻譯」可以核對意思，還有「🤖 問 AI 老師」，看不懂可以直接問。也可以直接跳到指定天數。']),
-      el('li',{},['「造句練習」：依詞性提供句型提示，練習用今天的單字自己寫出完整英文句子，並可請 AI 老師即時批改文法。']),
-      el('li',{},['「經典故事」：13 篇改寫自伊索寓言、格林童話、安徒生童話的延伸閱讀故事，附中文翻譯、閱讀理解測驗與延伸造句，會在複習日循環搭配，同樣附有「問 AI 老師」功能。']),
-      el('li',{},['「故事書單字」：取材自另一本《國中生必讀世界經典英文故事集》全書 42 篇故事的主題與重點單字，改寫成原創短篇故事＋中文翻譯（附「顯示中文翻譯」與「問 AI 老師」），再附上單字表、單字卡與逐字的造句練習（可請 AI 老師批改）；原書完整內文、練習題與官方翻譯仍請參閱你自己的書。']),
+      el('li',{},['「世界故事集」：取材自另一本《國中生必讀世界經典英文故事集》全書 42 篇故事的主題與重點單字，改寫成原創短篇故事＋中文翻譯，再附上單字表、單字卡、造句練習（重點單字＋參考單字）；原書完整內文、練習題與官方翻譯仍請參閱你自己的書。']),
+      el('li',{},['「經典故事」：13 篇改寫自伊索寓言、格林童話、安徒生童話的延伸閱讀故事，附中文翻譯、重點單字造句練習、閱讀理解測驗與延伸造句。']),
+      el('li',{},['「每日故事」：先讀一篇用今天 13 個新字寫成的短文（新字會用螢光標記），再用單字卡（正面英文、反面中文）＋造句練習＋小測驗鞏固記憶；文章下方有「🀄 顯示中文翻譯」可以核對意思，也可以直接跳到指定天數。']),
     ]),
     el('h3',{},['為什麼用故事學單字？']),
     el('p',{},['把單字放進句子和情境裡學，比死背單字表更容易記住意思、詞性和真實用法。因為原始單字表本身就是依主題分組（例如同一天常常是「人物」「食物」「動物」等同類單字），所以故事情境會特別自然、好懂。建議先讀故事抓大意，看不懂的字才回頭查中文意思，讀完再做單字卡和測驗加深印象。每篇文章都附有中文翻譯，但預設是隱藏的（按「顯示中文翻譯」才會出現），這是刻意設計成這樣——先靠自己理解英文，翻譯只是用來核對或救急，才能真正練到閱讀能力。']),
-    el('h3',{},['關於進度保存']),
-    el('p',{},['這個系統是單一網頁檔案，沒有連接資料庫，也沒有匯出/匯入進度的功能，所以進度只會保留在目前這個分頁開著的期間；一旦重新整理或關閉分頁，進度就會重置、下次要從頭開始。如果之後需要跨裝置自動存檔，需要另外接上像 Firebase 這樣的後端服務。']),
+    el('h3',{},['造句怎麼批改？']),
+    el('p',{},['這個系統本身不會呼叫任何 AI 服務，所以不需要申請 API 金鑰，也不會產生任何費用。「世界故事集」「經典故事」「每日故事」裡每個單字下方都有「📋 複製，貼去問 AI」按鈕：按下去會把「單字、詞性、意思、你寫的句子」整理成一段現成的提問文字，複製到剪貼簿。接著你可以自己貼到 Claude.ai、ChatGPT，或任何你平常在用的 AI 聊天網站，就能馬上得到文法批改和修改建議。如果自動複製失敗（例如瀏覽器權限問題），按鈕下方也會顯示同樣的文字，用手動選取、複製的方式一樣可以使用。']),
+    el('h3',{},['🔊 朗讀功能']),
+    el('p',{},['每個單字（單字卡、單字清單、造句練習欄位上方）旁邊都有一個小小的 🔊 按鈕，按下去瀏覽器就會唸出這個英文單字；每篇故事開頭也有一個 🔊 按鈕，可以唸出整篇英文故事。朗讀中按鈕會變成 ⏹，再按一次或按最上面標題列的「⏹ 停止朗讀」都可以立刻停止。']),
+    el('p',{},['最上面標題列有「語速」和「語音」兩個選單：語速可以選慢／稍慢／正常／稍快；語音選單會列出這個瀏覽器裡可以用的英文發音（通常有好幾種，例如不同口音或男女聲），如果覺得預設的聲音很怪，可以換一個試試看，選好的設定會記住，之後都會照這個設定唸。這個功能是用瀏覽器內建的語音朗讀功能做的，不需要連網、不會呼叫任何 AI 服務，完全免費，但發音好不好聽會依你用的瀏覽器和作業系統而不同（一般來說 Chrome 或 Edge 的語音選擇比較多、比較自然）。如果按了沒有聲音，先確認裝置音量和瀏覽器沒有被靜音；部分瀏覽器第一次使用語音功能時，可能需要先跟網頁有過一次點擊互動才能發聲。']),
+  ]));
+
+  root.appendChild(el('div',{class:'card'},[
     el('h3',{},['建議每週節奏']),
     el('p',{},['週一～週六：花 10-15 分鐘讀完當天短文，再做單字卡＋測驗＋造句。週日：花 20-30 分鐘複習整週單字、閱讀經典故事並完成理解測驗。']),
-  ]));
-
-  root.appendChild(el('div',{class:'card'},[
-    el('h2',{},['🤖 AI 助教設定']),
-    el('p',{},['設定好之後，「每日故事」「造句練習」「經典故事」「故事書單字」裡的「問 AI 老師」「請 AI 老師批改」按鈕就能使用，由 Claude 即時幫你檢查文法、回答問題。這項功能完全是選用的，不設定金鑰也完全不影響其他所有功能。']),
-  ]));
-
-  root.appendChild(el('div',{class:'card'},[
-    el('h3',{},['① 取得你自己的 API 金鑰']),
-    el('p',{class:'muted'},['這個功能需要你自己的 Anthropic API 金鑰才能運作：']),
-    el('ul',{class:'pattern-list'},[
-      el('li',{},['前往 ', (()=>{const a=el('a',{href:'https://console.anthropic.com/',target:'_blank',rel:'noopener'},['console.anthropic.com']); a.style.color='var(--brand-dark)'; return a;})(), ' 註冊帳號（未成年者請請家長協助申請與設定額度）。']),
-      el('li',{},['在 API Keys 頁面建立一組新金鑰，複製下來。']),
-      el('li',{},['這是「按用量計費」的付費服務，不是免費的——批改一句話的花費通常非常低（不到台幣一元），但建議在 Anthropic 後台設定用量上限，避免超支。']),
-    ]),
-    el('p',{class:'hint'},['⚠️ 金鑰只會存在這個分頁目前的記憶體裡，直接從你的瀏覽器呼叫 Anthropic 官方 API，不會經過我們或任何第三方伺服器；但也因為沒有存檔功能，重新整理或關閉分頁後金鑰就會消失，下次要用時需要重新貼上。']),
-  ]));
-
-  const setCard = el('div',{class:'card'});
-  setCard.appendChild(el('h3',{},['② 貼上金鑰']));
-  const keyInput = el('input',{type:'password', class:'input-text', placeholder:'sk-ant-...', style:'width:100%;max-width:420px;'});
-  keyInput.value = STATE.apiKey || '';
-  setCard.appendChild(keyInput);
-  setCard.appendChild(el('label',{class:'muted', style:'margin-top:10px;display:block'},['使用的模型（預設為速度快、費用低的 Haiku；想要更聰明的回覆可以改成 claude-sonnet-5，費用會較高）：']));
-  const modelInput = el('input',{type:'text', class:'input-text', style:'width:100%;max-width:420px;'});
-  modelInput.value = STATE.apiModel || 'claude-haiku-4-5';
-  setCard.appendChild(modelInput);
-
-  const statusMsg = el('p',{class:'muted'},['']);
-  setCard.appendChild(el('div',{class:'row gap', style:'margin-top:12px;flex-wrap:wrap'},[
-    el('button',{class:'btn primary', onclick:()=>{
-      STATE.apiKey = keyInput.value.trim();
-      STATE.apiModel = modelInput.value.trim() || 'claude-haiku-4-5';
-      statusMsg.textContent = '已儲存到目前的瀏覽器分頁（重新整理或關閉分頁後需要重新貼上）。';
-      statusMsg.className = 'good';
-    }},['儲存設定']),
-    el('button',{class:'btn', onclick: async ()=>{
-      STATE.apiKey = keyInput.value.trim();
-      STATE.apiModel = modelInput.value.trim() || 'claude-haiku-4-5';
-      statusMsg.textContent = '測試連線中...';
-      statusMsg.className = 'muted';
-      try{
-        const reply = await callClaude('請只回覆兩個字：「成功」', '你是一個連線測試機器人。');
-        statusMsg.textContent = '✅ 連線成功！AI 回覆：'+reply;
-        statusMsg.className = 'good';
-      }catch(e){
-        statusMsg.textContent = '❌ '+(e.message||'連線失敗，請檢查金鑰是否正確。');
-        statusMsg.className = 'bad';
-      }
-    }},['測試連線']),
-  ]));
-  setCard.appendChild(statusMsg);
-  root.appendChild(setCard);
-
-  root.appendChild(el('div',{class:'card'},[
-    el('h3',{},['如何使用']),
-    el('p',{class:'muted'},['設定完成後，到「造句練習」頁寫完句子，按下方的「請 AI 老師批改」；或在「每日故事」讀完短文後，直接針對內容提問，AI 都會用繁體中文簡短回覆，適合手機閱讀。'])
   ]));
 }
 
 /* ---------- Init ---------- */
-function init(){
+function startApp(){
+  initTtsControls();
   window.addEventListener('hashchange', render);
-  if(!location.hash) location.hash = '#vocab';
-  render();
+  if(!location.hash) location.hash = '#storybook';
+  window.addEventListener('beforeunload', ()=>{
+    const url = getSheetUrl();
+    if(url && cloudSaveTimer){
+      clearTimeout(cloudSaveTimer);
+      cloudSaveTimer = null;
+      saveToCloud(url, {keepalive:true});
+    }
+  });
+  const url = getSheetUrl();
+  if(url){
+    loadFromCloud(url).finally(()=>{ skipNextAutoSave = true; render(); });
+  } else {
+    render();
+  }
 }
-document.addEventListener('DOMContentLoaded', init);
+
+/* ---------- 開啟密碼 ---------- */
+// 簡單的用戶端密碼鎖：只是避免公開網址被隨意打開，不是真正的帳號安全機制。
+const APP_PASSWORD = '0813';
+const UNLOCK_KEY = 'vocabAppUnlocked_v1';
+function initLock(){
+  const lockScreen = document.getElementById('lockScreen');
+  const appRoot = document.getElementById('appRoot');
+  function showApp(){
+    if(lockScreen) lockScreen.style.display = 'none';
+    if(appRoot) appRoot.style.display = '';
+    startApp();
+  }
+  let unlocked = false;
+  try{ unlocked = sessionStorage.getItem(UNLOCK_KEY) === '1'; }catch(e){}
+  if(unlocked){ showApp(); return; }
+
+  const input = document.getElementById('lockPasswordInput');
+  const btn = document.getElementById('lockSubmitBtn');
+  const err = document.getElementById('lockError');
+  function tryUnlock(){
+    if((input.value||'') === APP_PASSWORD){
+      try{ sessionStorage.setItem(UNLOCK_KEY, '1'); }catch(e){}
+      showApp();
+    } else {
+      if(err) err.style.display = 'block';
+      if(input){ input.value=''; input.focus(); }
+    }
+  }
+  if(btn) btn.addEventListener('click', tryUnlock);
+  if(input){
+    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter') tryUnlock(); });
+    input.focus();
+  }
+}
+document.addEventListener('DOMContentLoaded', initLock);
 })();
 
 </script>
