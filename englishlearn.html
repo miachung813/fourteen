@@ -1464,7 +1464,13 @@ function startApp(){
   // 每次「打開」這個網頁（重新整理、從書籤／主畫面圖示開啟等）都固定先顯示世界故事集，
   // 不要沿用瀏覽器網址列殘留的上次分頁 hash（例如上次逛到「每日故事」，網址列殘留 #vocab，
   // 下次直接用書籤打開就會變成優先顯示每日故事，不是使用者要的「打開後預設看到世界故事集」）。
-  location.hash = '#storybook';
+  // 注意：這裡故意用 history.replaceState 而不是直接改 location.hash——直接改 location.hash
+  // 會立刻觸發一次 hashchange → render()，如果這時候雲端進度都還沒載入完成，那次 render() 用的
+  // 會是空的預設進度，還會被 scheduleCloudSave() 排入 1.5 秒後自動存檔；萬一雲端試算表（Google
+  // Apps Script）剛好慢啟動、要 1.5 秒以上才讀回真實進度，這個空進度就可能搶先蓋掉雲端已存的資料，
+  // 造成「雲端同步失效、進度被清空」的問題。用 replaceState 只改網址列文字，不會觸發任何 render。
+  try{ history.replaceState(null, '', location.pathname + location.search + '#storybook'); }
+  catch(e){ location.hash = '#storybook'; }
   window.addEventListener('beforeunload', ()=>{
     const url = getSheetUrl();
     if(url && cloudSaveTimer){
