@@ -1461,7 +1461,10 @@ function startApp(){
   initTtsControls();
   initStoryTextInteractions();
   window.addEventListener('hashchange', render);
-  if(!location.hash) location.hash = '#storybook';
+  // 每次「打開」這個網頁（重新整理、從書籤／主畫面圖示開啟等）都固定先顯示世界故事集，
+  // 不要沿用瀏覽器網址列殘留的上次分頁 hash（例如上次逛到「每日故事」，網址列殘留 #vocab，
+  // 下次直接用書籤打開就會變成優先顯示每日故事，不是使用者要的「打開後預設看到世界故事集」）。
+  location.hash = '#storybook';
   window.addEventListener('beforeunload', ()=>{
     const url = getSheetUrl();
     if(url && cloudSaveTimer){
