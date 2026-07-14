@@ -1019,8 +1019,10 @@ function saveToCloud(url, opts){
   });
 }
 
-function loadFromCloud(url){
-  setCloudSyncState('pending', '☁️ 正在從雲端載入進度…');
+function loadFromCloud(url, opts){
+  opts = opts || {};
+  const attempt = opts.attempt || 1;
+  setCloudSyncState('pending', attempt>1 ? '☁️ 連線不穩，正在重試…' : '☁️ 正在從雲端載入進度…');
   return fetch(url).then(res=>{
     if(!res.ok) throw new Error('HTTP '+res.status);
     return res.text();
@@ -1040,7 +1042,14 @@ function loadFromCloud(url){
     setCloudSyncState('idle', '☁️ 雲端試算表目前是空的，將從新進度開始');
     return false;
   }).catch(()=>{
-    setCloudSyncState('error', '⚠️ 無法連線到雲端試算表，請檢查網址是否正確');
+    // 手機網路或 Google 伺服器偶爾會反應較慢／不穩，先自動重試一次，
+    // 避免單純的網路小狀況就顯示嚇人的錯誤訊息。
+    if(attempt < 3){
+      return new Promise(resolve=>{
+        setTimeout(()=>{ resolve(loadFromCloud(url, {attempt: attempt+1})); }, 2000);
+      });
+    }
+    setCloudSyncState('error', '⚠️ 暫時無法連線雲端試算表，可能是網路不穩，點這裡可以重新整理網址並重試');
     return false;
   });
 }
