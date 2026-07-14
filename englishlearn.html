@@ -248,6 +248,7 @@ footer{max-width:960px; margin:0 auto; padding:0 14px 40px; color:var(--muted); 
     <a class="tab-btn" data-tab="storybook" href="#storybook">世界故事集</a>
     <a class="tab-btn" data-tab="reading" href="#reading">經典故事</a>
     <a class="tab-btn" data-tab="vocab" href="#vocab">每日故事</a>
+    <a class="tab-btn" data-tab="extra" href="#extra">課外單字</a>
     <a class="tab-btn" data-tab="guide" href="#guide">使用說明</a>
   </nav>
 </header>
@@ -342,6 +343,7 @@ const DEFAULT_STATE = () => ({
   readingSentences: {},          // {"storyId_wordIndex": "使用者造的句子"}（經典故事重點單字造句）
   weakWords: {},                 // {"source:key": {source, w, pos, m, streak}} 使用者標記的不熟單字，跨每日故事／經典故事／世界故事集
   underlines: {},                // {"paraKey": [wordIdx, ...]} 使用者在文章裡選取畫的底線標記（依段落、以單字索引記錄）
+  extraWords: {},                 // {"lowercaseWord": {w, m, pos, status, addedAt, edited}} 文章裡標記為不熟、但不在 2000 單字表裡的字，統一收在「課外單字」分頁，中文意思用免費翻譯服務自動查詢
   streakDates: [],               // ["2026-07-13", ...] 只作記錄用，不影響進度
   createdAt: new Date().toISOString()
 });
@@ -429,6 +431,52 @@ function findVocabMeaning(word){
   const hit = VOCAB.find(v=> v.w.toLowerCase()===lower);
   return hit ? {pos:hit.pos, m:hit.m} : {pos:'', m:''};
 }
+
+/* ---------- 課外單字（不在 2000 單字表裡、但文章中被標記為不熟的字）---------- */
+// 用免費的 MyMemory 翻譯服務查詢單一英文字的中文意思（不需要 API 金鑰，僅供輕量使用）。
+// 查詢失敗（沒有網路、服務暫時掛掉等）就丟出錯誤，呼叫端會標記成 status:'error' 讓使用者可以手動重試。
+function translateWordApi(word){
+  const url = 'https://api.mymemory.translated.net/get?q='+encodeURIComponent(word)+'&langpair=en|zh-TW';
+  return fetch(url).then(res=>{
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return res.json();
+  }).then(data=>{
+    const t = data && data.responseData && data.responseData.translatedText;
+    if(!t || /INVALID|MYMEMORY WARNING/i.test(String(t))) throw new Error('no translation');
+    return String(t).trim();
+  });
+}
+// 把某個字加進「課外單字」清單（如果還沒加過），並非同步查詢中文意思。
+// 同一個字（不分大小寫）只會查一次翻譯、只會在課外單字分頁出現一筆，即使在好幾個地方都被標記不熟。
+function addExtraWord(word){
+  const lower = String(word).toLowerCase();
+  let entry = STATE.extraWords[lower];
+  if(entry && (entry.status==='ready' || entry.status==='loading')) return entry;
+  entry = {w:word, m:'', pos:'', status:'loading', edited:false, addedAt:new Date().toISOString()};
+  STATE.extraWords[lower] = entry;
+  fetchExtraWordTranslation(lower, word);
+  return entry;
+}
+function fetchExtraWordTranslation(lower, word){
+  translateWordApi(word).then(m=>{
+    const entry = STATE.extraWords[lower];
+    if(!entry) return; // 使用者可能在翻譯查詢完成前就把它刪掉了
+    entry.m = m;
+    entry.status = 'ready';
+    // 同步更新所有引用到這個字的「不熟單字」項目，讓複習測驗可以直接用真的中文意思出選擇題。
+    Object.keys(STATE.weakWords).forEach(k=>{
+      const w = STATE.weakWords[k];
+      if(w.source==='article' && String(w.w).toLowerCase()===lower && !w.m){ w.m = m; }
+    });
+    scheduleCloudSave();
+    render();
+  }).catch(()=>{
+    const entry = STATE.extraWords[lower];
+    if(!entry) return;
+    entry.status = 'error';
+    render();
+  });
+}
 // 文章裡任何一個字都可以直接標記「不熟」，不再限定只有重點單字／參考單字才能標記。
 // key 用「段落key:字的索引」組成，跟畫底線共用同一套 data-para/data-widx 定位方式。
 function toggleArticleWeakWord(target){
@@ -441,7 +489,14 @@ function toggleArticleWeakWord(target){
     unflagWeak('article', key);
   } else {
     const meta = findVocabMeaning(word);
-    flagWeak('article', key, {w:word, pos:meta.pos, m:meta.m});
+    if(meta.m){
+      flagWeak('article', key, {w:word, pos:meta.pos, m:meta.m});
+    } else {
+      // 不在 2000 單字表裡：一邊用「自我勾選」的方式先讓測驗可以用，一邊加進課外單字清單自動查中文意思，
+      // 查到之後（見 fetchExtraWordTranslation）這裡的 m 會被自動補上，測驗就會自動升級成真的選擇題。
+      flagWeak('article', key, {w:word, pos:'', m:''});
+      addExtraWord(word);
+    }
   }
   render();
 }
@@ -816,6 +871,69 @@ function buildWeakReviewQuiz(){
   return card;
 }
 
+/* ---------- 課外單字分頁：收集文章裡標記為不熟、但不在 2000 單字表裡的字，並附上（自動查詢的）中文意思 ---------- */
+function renderExtraWords(root){
+  root.appendChild(el('div',{class:'card'},[
+    el('h2',{},['📓 課外單字']),
+    el('p',{class:'muted'},['在「每日故事」「經典故事」「世界故事集」的文章裡點兩下標記不熟的字，如果這個字不在 2000 單字表裡，就會自動出現在這裡，並用免費翻譯服務幫你查一個中文意思參考。翻譯不一定 100% 準確，你可以直接在下面修改成更好的說法，改完會自動存檔。']),
+  ]));
+  const entries = Object.keys(STATE.extraWords)
+    .map(lower=>({lower, ...STATE.extraWords[lower]}))
+    .sort((a,b)=> (b.addedAt||'').localeCompare(a.addedAt||''));
+  const card = el('div',{class:'card'});
+  if(entries.length===0){
+    card.appendChild(el('p',{class:'muted'},['目前還沒有課外單字。去文章裡雙擊（快速點兩下）你不熟的字試試看吧！']));
+    root.appendChild(card);
+    return;
+  }
+  card.appendChild(el('p',{class:'muted small'},[`共 ${entries.length} 個課外單字。`]));
+  entries.forEach(en=>{
+    const row = el('div',{class:'card', style:'margin-bottom:10px;'});
+    const head = el('div',{class:'row gap wrap', style:'align-items:center;'},[
+      el('span',{class:'en big'},[en.w]),
+    ]);
+    head.appendChild(buildSpeakBtn(en.w, {small:true}));
+    const delBtn = el('button',{class:'btn small', title:'從課外單字移除'},['🗑 移除']);
+    delBtn.addEventListener('click', ()=>{
+      delete STATE.extraWords[en.lower];
+      scheduleCloudSave();
+      render();
+    });
+    head.appendChild(delBtn);
+    row.appendChild(head);
+    if(en.status==='loading'){
+      row.appendChild(el('p',{class:'muted small'},['🔄 正在自動查詢中文意思…']));
+    } else if(en.status==='error'){
+      const errWrap = el('p',{class:'bad small'},['⚠️ 自動查詢失敗（可能是網路問題），']);
+      const retryBtn = el('button',{class:'btn small', style:'margin-left:6px;'},['點我重試']);
+      retryBtn.addEventListener('click', ()=>{
+        const entry = STATE.extraWords[en.lower];
+        if(entry){ entry.status='loading'; render(); fetchExtraWordTranslation(en.lower, entry.w); }
+      });
+      errWrap.appendChild(retryBtn);
+      row.appendChild(errWrap);
+      row.appendChild(el('p',{class:'muted small'},['或是直接在下面自己輸入中文意思：']));
+    }
+    const meaningInput = el('input',{type:'text', class:'input-text', style:'width:100%;box-sizing:border-box;margin-top:6px;', placeholder:'中文意思（可自己輸入或修改）'});
+    meaningInput.value = en.m || '';
+    meaningInput.addEventListener('change', ()=>{
+      const entry = STATE.extraWords[en.lower];
+      if(!entry) return;
+      entry.m = meaningInput.value.trim();
+      entry.status = 'ready';
+      entry.edited = true;
+      Object.keys(STATE.weakWords).forEach(k=>{
+        const w = STATE.weakWords[k];
+        if(w.source==='article' && String(w.w).toLowerCase()===en.lower){ w.m = entry.m; }
+      });
+      scheduleCloudSave();
+    });
+    row.appendChild(meaningInput);
+    card.appendChild(row);
+  });
+  root.appendChild(card);
+}
+
 /* ---------- 複製到剪貼簿（給「造句練習」用來自己貼去問 AI，本系統不直接呼叫任何 AI API） ---------- */
 function copyToClipboard(text, done){
   function fallback(){
@@ -1059,6 +1177,7 @@ const TABS = [
   {id:'storybook', label:'世界故事集'},
   {id:'reading', label:'經典故事'},
   {id:'vocab', label:'每日故事'},
+  {id:'extra', label:'課外單字'},
   {id:'guide', label:'使用說明'}
 ];
 
@@ -1072,6 +1191,7 @@ function render(){
   switch(hash){
     case 'reading': renderReading(root); break;
     case 'storybook': renderStorybook(root); break;
+    case 'extra': renderExtraWords(root); break;
     case 'guide': renderGuide(root); break;
     default: renderVocab(root);
   }
@@ -1535,6 +1655,8 @@ function renderGuide(root){
     el('p',{},['提醒：這份不熟單字清單和其他學習進度一樣，只存在這個瀏覽器裡；如果想在不同裝置或瀏覽器之間同步，需要先設定好 Google 試算表雲端同步（同步狀態會顯示在各分頁最上方），沒有設定的話清除瀏覽器資料或換裝置就會遺失記錄。']),
     el('p',{},['如果最上面的同步狀態顯示「☁️ 尚未設定雲端同步」，點一下那行文字就可以貼上（或更新）你的 Google Apps Script 網址重新設定；換了瀏覽器、裝置，或把這個檔案搬到不同網址（例如從本機測試換成正式上傳到網站）都需要重新貼一次，因為這個網址是存在瀏覽器裡，不會跟著檔案內容走。']),
     el('p',{},['小技巧：設定好之後，同一個小視窗裡會出現「📋 複製我的個人同步連結」按鈕，複製起來傳給自己（例如用 LINE 傳給自己的手機），下次用那個連結打開就會自動接上同一份雲端進度，不用每次手動重新貼網址；但這個連結只適合傳給自己，傳給別人會變成同步到同一份進度、互相覆蓋，不要傳給同學喔。']),
+    el('h3',{},['📓 課外單字']),
+    el('p',{},['文章裡標記不熟的字，如果剛好不在 2000 單字表裡（例如人名、比較少見的字），系統會自動把它收進「課外單字」分頁，並用免費翻譯服務幫你查一個中文意思參考；查詢需要一點時間和網路連線，查好之後「⭐ 不熟單字複習」測驗也會自動變成真的中文選擇題，不用再用聽發音自我勾選的方式。翻譯不一定完全準確，可以直接在「課外單字」分頁裡修改成更好的說法，改完會自動存檔；也可以按「🗑 移除」把不需要的字刪掉。']),
     el('h3',{},['🖱️ 文章點字發音＋畫底線＋標記不熟']),
     el('p',{},['「世界故事集」「經典故事」「每日故事」裡的文章內文，每一個英文字都可以直接點一下，瀏覽器就會唸出這個字（用的是同一套朗讀設定，語速、語音都相同）。']),
     el('p',{},['如果想在文章上標記重點，用滑鼠拖曳（手機／平板用手指滑動）選取一段文字，放開之後這段文字就會自動加上底線，像用螢光筆畫重點一樣；可以連續選好幾個字（例如 "ice cream"、"police officer" 這種算一個詞的片語就可以整個一起選起來連在一起）；再選取同一段文字一次，就會取消底線。']),
