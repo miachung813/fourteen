@@ -68,6 +68,7 @@ header.topbar{
 }
 header.topbar h1{margin:0 0 10px; font-size:20px;}
 .sync-indicator{font-size:12px; margin:-4px 0 10px; opacity:.9;}
+.sync-indicator:hover{text-decoration:underline; opacity:1;}
 .sync-indicator.sync-success{color:#dff2e1;}
 .sync-indicator.sync-error{color:#ffd9d0;}
 .sync-indicator.sync-pending,.sync-indicator.sync-saving{color:#fff2df;}
@@ -911,6 +912,29 @@ function setCloudSyncState(status, text){
     guideEl.className = (status==='error' ? 'bad small' : (status==='success' ? 'good small' : 'muted small'));
   }
 }
+// 雲端同步網址是存在「這個瀏覽器＋這個網址（origin）」的 localStorage 裡的，不會跟著檔案內容走。
+// 如果同一份檔案被放到不同網址（例如先在本機打開測試，後來又上傳到 GitHub Pages），或是換了瀏覽器／裝置，
+// 就會變成「尚未設定雲端同步」，因為 localStorage 沒有跟著搬過去。
+// 使用說明頁面照之前的要求不放完整設定教學，但還是需要有地方能重新貼網址，所以點一下最上面的同步狀態文字，
+// 就會跳出一個小視窗讓你貼上（或更新）Google Apps Script 網頁應用程式網址，貼上後會立刻嘗試連線同步。
+function initCloudSyncIndicatorClick(){
+  const ind = document.getElementById('cloudSyncIndicator');
+  if(!ind) return;
+  ind.style.cursor = 'pointer';
+  ind.title = '點一下可以設定或更新雲端同步網址';
+  ind.addEventListener('click', ()=>{
+    const current = getSheetUrl();
+    const input = window.prompt('請貼上 Google Apps Script 網頁應用程式網址（.../exec）\n留空後按確定可以取消雲端同步：', current);
+    if(input===null) return; // 使用者按取消，什麼都不做
+    const trimmed = input.trim();
+    setSheetUrl(trimmed);
+    if(trimmed){
+      loadFromCloud(trimmed).finally(()=>{ skipNextAutoSave = true; render(); });
+    } else {
+      setCloudSyncState('idle', '☁️ 尚未設定雲端同步');
+    }
+  });
+}
 
 let cloudSaveTimer = null;
 function scheduleCloudSave(){
@@ -1444,6 +1468,7 @@ function renderGuide(root){
     el('p',{},['不只限於單字表裡的重點單字或參考單字——文章內文裡任何一個字，只要快速點兩下（雙擊）就能直接標記「不熟」，再點兩下取消，不需要這個字剛好在單字表裡才能標記。']),
     el('p',{},['三個分頁最上面都會出現「⭐ 不熟單字複習」卡片，列出目前所有標記過的單字（只顯示英文和詞性、以及複習進度，不會先顯示中文意思，避免看到答案），按「開始複習測驗 →」就會出一份複習測驗（最多 10 題），送出測驗後才會告訴你每題對不對。如果這個字剛好在單字表裡，會出「選中文意思」的選擇題自動判斷對錯；如果是直接從文章裡標記、不在單字表裡的字（例如人名、少見的字），會改成先聽發音，再自己勾選「記住了」或「還不熟」。不管哪一種，答對一次進度會 +1，連續答對 2 次系統就會自動把這個字從清單畢業移除，答錯則進度歸零、下次要重新累積。']),
     el('p',{},['提醒：這份不熟單字清單和其他學習進度一樣，只存在這個瀏覽器裡；如果想在不同裝置或瀏覽器之間同步，需要先設定好 Google 試算表雲端同步（同步狀態會顯示在各分頁最上方），沒有設定的話清除瀏覽器資料或換裝置就會遺失記錄。']),
+    el('p',{},['如果最上面的同步狀態顯示「☁️ 尚未設定雲端同步」，點一下那行文字就可以貼上（或更新）你的 Google Apps Script 網址重新設定；換了瀏覽器、裝置，或把這個檔案搬到不同網址（例如從本機測試換成正式上傳到網站）都需要重新貼一次，因為這個網址是存在瀏覽器裡，不會跟著檔案內容走。']),
     el('h3',{},['🖱️ 文章點字發音＋畫底線＋標記不熟']),
     el('p',{},['「世界故事集」「經典故事」「每日故事」裡的文章內文，每一個英文字都可以直接點一下，瀏覽器就會唸出這個字（用的是同一套朗讀設定，語速、語音都相同）。']),
     el('p',{},['如果想在文章上標記重點，用滑鼠拖曳（手機／平板用手指滑動）選取一段文字，放開之後這段文字就會自動加上底線，像用螢光筆畫重點一樣；可以連續選好幾個字（例如 "ice cream"、"police officer" 這種算一個詞的片語就可以整個一起選起來連在一起）；再選取同一段文字一次，就會取消底線。']),
@@ -1460,6 +1485,7 @@ function renderGuide(root){
 function startApp(){
   initTtsControls();
   initStoryTextInteractions();
+  initCloudSyncIndicatorClick();
   window.addEventListener('hashchange', render);
   // 每次「打開」這個網頁（重新整理、從書籤／主畫面圖示開啟等）都固定先顯示世界故事集，
   // 不要沿用瀏覽器網址列殘留的上次分頁 hash（例如上次逛到「每日故事」，網址列殘留 #vocab，
