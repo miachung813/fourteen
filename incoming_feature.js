@@ -204,24 +204,29 @@ function findBestItemForRow(row, cust, quoteIdx) {
 function getRowPriceInfo(x) {
   const ov = incomingAmountOverrides[x.r.report_no];
   if (ov && ov.amount != null && ov.amount !== '') {
-    return { amount: Number(ov.amount), source: 'manual' };
+    // 手動輸入的金額就是使用者自己打的數字，沒有未稅／含稅的區分資訊，
+    // 兩邊都算同一個數字，不會另外幫忙猜測或調整。
+    const v = Number(ov.amount);
+    return { amount: v, amountUntaxed: v, source: 'manual' };
   }
   if (x.itemMatch) {
     const mq = x.itemMatch.q;
     const taxRate = Number(mq.taxRate) || 0;
-    let amount = Number(x.itemMatch.it.price) || 0;
+    const untaxed = Number(x.itemMatch.it.price) || 0;
     // 報價單右下角如果有列稅金（稅率 > 0，代表這張報價單是含稅價），每個
     // 測項抓到的金額要自動換算成含稅價；如果這張報價單本身未稅／免稅
     // （稅率 = 0），金額維持原本抓到的優惠價，不用調整。四捨五入到整數，
-    // 跟系統其他地方金額的進位規則一致。
-    if (taxRate > 0) amount = Math.round(amount * (1 + taxRate / 100));
+    // 跟系統其他地方金額的進位規則一致。amount 是「畫面上顯示、可能已經
+    // 含稅」的金額；amountUntaxed 是原始未稅單價，用來算「業績總金額」
+    // 的未稅／含稅兩個數字分開顯示。
+    const amount = taxRate > 0 ? Math.round(untaxed * (1 + taxRate / 100)) : untaxed;
     return {
-      amount,
+      amount, amountUntaxed: untaxed,
       source: x.itemMatch.viaAlias ? 'dict' : (x.itemMatch.score >= 3 ? 'auto' : 'auto-fuzzy'),
       quoteNo: mq.quoteNo, date: mq.date, itemName: x.itemMatch.it.item,
     };
   }
-  return { amount: null, source: 'none' };
+  return { amount: null, amountUntaxed: null, source: 'none' };
 }
 
 // ---------- 資料載入 ----------
@@ -283,8 +288,17 @@ async function loadIncomingData(force) {
     const quoteIdx = buildQuoteIndexByCust();
     const memo = new Map();
     const out = [];
+    // 收樣紀錄總表來源資料本身有時候會把同一筆資料重複列出兩次（同一個
+    // 報告號碼＋測項＋樣品名稱完全一樣的列出現兩次，不是分頁交界造成的，
+    // 同一個月的檔案裡就會重複），如果沒有濾掉，筆數、金額加總都會被灌
+    // 水（例如同一筆 $16,000 的測項被算成兩次變 $32,000）。這裡用「報告
+    // 號碼＋測項＋樣品名稱」當唯一 key，同一個 key 只留第一筆。
+    const seenKeys = new Set();
     for (const rows of loaded) {
       for (const r of rows) {
+        const dupKey = (r.report_no || '') + '' + (r.test_item || '') + '' + (r.sample || '');
+        if (seenKeys.has(dupKey)) continue;
+        seenKeys.add(dupKey);
         const m = r.vendor ? matchVendorToCustomer(String(r.vendor), idx, memo) : null;
         let itemMatch = null;
         if (m) itemMatch = findBestItemForRow(r, m.cust, quoteIdx);
@@ -353,7 +367,10 @@ function incomingFilteredRows() {
     if (cf.dueDate && !String(x.r.due_date || '').includes(cf.dueDate)) return false;
     if (cf.reportDate && !String(x.r.report_date || '').includes(cf.reportDate)) return false;
     if (cf.quoteNo && !inNorm(info.quoteNo || '').includes(inNorm(cf.quoteNo))) return false;
-    if (cf.amount && !String(info.amount != null ? info.amount : '').includes(cf.amount)) return false;
+    // 報價金額這欄是下拉選單，不是打字篩選：'blank' 篩「還沒有金額」的
+    // （方便手動填價），'has' 篩「已經有金額」的，空字串（預設）不篩選。
+    if (cf.amount === 'blank' && info.amount != null) return false;
+    if (cf.amount === 'has' && info.amount == null) return false;
     return true;
   });
 }
@@ -374,45 +391,73 @@ function setupIncomingUiEnhancements() {
   if (!table || !thead || !headerRow) return;
   incomingUiEnhanced = true;
 
-  // 1) 每欄篩選：在標題列下面插入一列篩選輸入框
+  // 表格原本套用 table-layout:fixed（十欄平分寬度），報告號碼／報價單號
+  // 這種比較長的英數字代碼會被切掉、超出格子。這裡只針對這張表格改成
+  // auto（欄寬跟著內容自動調整），不會影響到頁面上其他也用同一個
+  // db-table 樣式的表格。
+  table.style.tableLayout = 'auto';
+
+  // 1) 每欄篩選：在標題列下面插入一列篩選輸入框（報價金額是下拉選單，
+  //    其他是文字輸入框）。min-width 讓報告號碼／報價單號這種比較長的
+  //    欄位有足夠寬度，不會被壓縮到超出格子。
   const filterCols = [
-    ['reportNo', '篩選報告號碼'], ['vendor', '篩選廠商名稱'], ['cust', '篩選對應客戶'],
-    ['sample', '篩選樣品名稱'], ['testItem', '篩選取樣測項'], ['inDate', '篩選進件日期'],
-    ['dueDate', '篩選預定出件'], ['reportDate', '篩選報告出件日'], ['quoteNo', '篩選報價單號'],
-    ['amount', '篩選報價金額'],
+    ['reportNo', '篩選報告號碼', '120px'], ['vendor', '篩選廠商名稱', '110px'],
+    ['cust', '篩選對應客戶', '110px'], ['sample', '篩選樣品名稱', '100px'],
+    ['testItem', '篩選取樣測項', '110px'], ['inDate', '篩選進件日期', '95px'],
+    ['dueDate', '篩選預定出件', '95px'], ['reportDate', '篩選報告出件日', '95px'],
+    ['quoteNo', '篩選報價單號', '130px'], ['amount', null, '95px'],
   ];
   const filterRow = document.createElement('tr');
   filterRow.className = 'incoming-col-filter-row';
-  filterCols.forEach(([key, ph]) => {
+  filterCols.forEach(([key, ph, minW]) => {
     const th = document.createElement('th');
     th.style.fontWeight = 'normal';
     th.style.padding = '4px';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = ph;
-    input.dataset.colFilter = key;
-    input.style.width = '100%';
-    input.style.boxSizing = 'border-box';
-    input.style.fontSize = '12px';
-    th.appendChild(input);
+    th.style.minWidth = minW;
+    let el;
+    if (key === 'amount') {
+      el = document.createElement('select');
+      el.innerHTML = '<option value="">報價金額：全部</option>' +
+        '<option value="blank">只看空白（未填）</option>' +
+        '<option value="has">只看已有金額</option>';
+    } else {
+      el = document.createElement('input');
+      el.type = 'text';
+      el.placeholder = ph;
+    }
+    el.dataset.colFilter = key;
+    el.style.width = '100%';
+    el.style.boxSizing = 'border-box';
+    el.style.fontSize = '12px';
+    th.appendChild(el);
     filterRow.appendChild(th);
   });
   headerRow.insertAdjacentElement('afterend', filterRow);
-  filterRow.addEventListener('input', (e) => {
+  const onColFilterChange = (e) => {
     const el = e.target.closest('[data-col-filter]');
     if (!el) return;
     incomingColFilters[el.dataset.colFilter] = el.value;
     incomingPage = 1;
     renderIncomingTable();
-  });
+  };
+  filterRow.addEventListener('input', onColFilterChange);
+  filterRow.addEventListener('change', onColFilterChange);
+
+  // 也順手把報告號碼／報價單號兩欄的資料儲存格 min-width 設寬一點，
+  // 表格重繪（body.innerHTML）不會動到這個 <style>，只要設定一次即可。
+  const styleTag = document.createElement('style');
+  styleTag.textContent =
+    '#incomingTableBody td:nth-child(1){min-width:120px;} ' +
+    '#incomingTableBody td:nth-child(9){min-width:130px;}';
+  document.head.appendChild(styleTag);
 
   // 2) 業績總金額：跟著目前篩選條件（月份、客戶、搜尋、每欄篩選…）即時
-  //    變動，不是固定寫死的總數。
+  //    變動，未稅／含稅分開顯示，不是單一固定寫死的總數。
   const metaEl = document.getElementById('incomingMeta');
   if (metaEl && !document.getElementById('incomingRevenueTotal')) {
     const box = document.createElement('div');
     box.id = 'incomingRevenueTotal';
-    box.style.cssText = 'margin:8px 0;font-size:16px;font-weight:bold;color:#1565c0;';
+    box.style.cssText = 'margin:8px 0;display:flex;gap:24px;flex-wrap:wrap;';
     metaEl.insertAdjacentElement('afterend', box);
   }
 
@@ -486,14 +531,20 @@ function renderIncomingTable() {
 
   // 業績總金額：只算「目前篩選條件下」看得到的這些列（不受分頁影響，是
   // 全部符合篩選的加總），月份範圍、客戶、搜尋、每欄篩選改變時都會跟著
-  // 重新計算。
+  // 重新計算。未稅／含稅分開顯示——未稅是抓到的原始優惠價加總，含稅是
+  // 换算過（若該張報價單有稅率）之後實際顯示在報價金額欄的數字加總。
   const revBox = document.getElementById('incomingRevenueTotal');
   if (revBox) {
     const filteredPriced = list.map(getRowPriceInfo).filter(p => p.amount != null);
-    const filteredTotal = filteredPriced.reduce((s, p) => s + p.amount, 0);
-    revBox.textContent = '業績總金額（目前篩選條件）：' +
-      (typeof fmt === 'function' ? fmt(filteredTotal) : ('$' + filteredTotal)) +
-      '（' + filteredPriced.length + ' 筆有金額）';
+    const untaxedTotal = filteredPriced.reduce((s, p) => s + (p.amountUntaxed != null ? p.amountUntaxed : p.amount), 0);
+    const taxedTotal = filteredPriced.reduce((s, p) => s + p.amount, 0);
+    const fmtNum = (n) => (typeof fmt === 'function' ? fmt(n) : ('$' + n));
+    revBox.innerHTML =
+      '<div><span style="color:#666;font-size:13px;">業績總金額（未稅）</span><br>' +
+      '<span style="font-size:18px;font-weight:bold;color:#1565c0;">' + fmtNum(untaxedTotal) + '</span></div>' +
+      '<div><span style="color:#666;font-size:13px;">業績總金額（含稅）</span><br>' +
+      '<span style="font-size:18px;font-weight:bold;color:#c62828;">' + fmtNum(taxedTotal) + '</span></div>' +
+      '<div style="align-self:flex-end;color:#999;font-size:12px;">（目前篩選條件下 ' + filteredPriced.length + ' 筆有金額）</div>';
   }
 
   const totalPages = Math.max(1, Math.ceil(list.length / INCOMING_PAGE_SIZE));
