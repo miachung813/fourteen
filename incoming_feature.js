@@ -14,9 +14,23 @@ let incomingPage = 1;
 let incomingLoading = false;
 const incomingMonthCache = {};    // ym -> rows
 
-// 手動輸入的金額覆蓋層：reportNo -> { amount, vendor, customer, updatedAt }
-// 雲端同步（跟客戶/檢驗項目/報價記錄/常用備註一樣，整批覆蓋對應試算表分頁）。
+// 同一個「報告號碼」底下常常不只一列（同一份樣品可能同時做好幾個測項），
+// 所以不管是判斷重複資料、還是手動輸入金額要記在哪一列，都不能只用報告
+// 號碼當 key，一定要「報告號碼＋取樣測項＋樣品名稱」三個一起才是唯一的
+// 一列。這裡統一提供一個function，避免各處寫法不一致。
+function incomingRowKey_(r) {
+  return (r.report_no || '') + '' + (r.test_item || '') + '' + (r.sample || '');
+}
+
+// 手動輸入的金額覆蓋層：rowKey（incomingRowKey_ 算出來的報告號碼＋測項＋
+// 樣品名稱組合）-> { amount, reportNo, testItem, sample, vendor, customer,
+// updatedAt }。雲端同步（跟客戶/檢驗項目/報價記錄/常用備註一樣，整批覆蓋
+// 對應試算表分頁）。
 let incomingAmountOverrides = {};
+// 舊版本只用報告號碼存手動金額（沒有記錄是哪個測項），從雲端讀回來但還沒
+// 辦法還原成新格式的，先放這裡暫存，等 loadIncomingData 把收樣資料載好、
+// 知道這個報告號碼底下實際有哪些測項列之後，再一次搬遷成新格式。
+let incomingLegacyAmountOverrides = {};
 
 // 使用者整理的「取樣測項 → 報價單品名」對照表（因為很多取樣測項跟報價單
 // 品名寫法差很多、自動比對抓不到，這份是人工核對過的正確對應，比對優先度
@@ -206,12 +220,12 @@ function findBestItemForRow(row, cust, quoteIdx) {
 // 算出某一筆收樣紀錄「目前應該顯示的金額」：手動輸入過的優先，否則用自動
 // 比對到的單價，都沒有就是 none（畫面上會是空的可編輯輸入框）。
 function getRowPriceInfo(x) {
-  const ov = incomingAmountOverrides[x.r.report_no];
+  const ov = incomingAmountOverrides[incomingRowKey_(x.r)];
   if (ov && ov.amount != null && ov.amount !== '') {
     // 手動輸入的金額就是使用者自己打的數字，沒有未稅／含稅的區分資訊，
     // 兩邊都算同一個數字，不會另外幫忙猜測或調整。
     const v = Number(ov.amount);
-    return { amount: v, amountUntaxed: v, source: 'manual' };
+    return { amount: v, amountUntaxed: v, source: 'manual', migratedAmbiguous: !!ov.migratedAmbiguous };
   }
   if (x.itemMatch) {
     const mq = x.itemMatch.q;
@@ -313,6 +327,10 @@ async function loadIncomingData(force) {
     out.sort((a, b) => String(b.r.in_date || '').localeCompare(String(a.r.in_date || '')));
     incomingRows = out;
 
+    // 把舊格式（只用報告號碼記手動金額）的資料搬遷成新格式，搬遷完要記得
+    // 回寫雲端，不然下次重新整理又會讀到舊格式。
+    if (migrateLegacyIncomingAmountOverrides_(incomingRows)) syncIncomingAmountsToCloud();
+
     // 客戶下拉選單
     const counts = new Map();
     for (const x of incomingRows) if (x.cust) counts.set(x.cust.name, (counts.get(x.cust.name) || 0) + 1);
@@ -413,22 +431,39 @@ function setupIncomingUiEnhancements() {
     scrollWrap.style.paddingBottom = '4px';
   }
 
+  // 標題列文字太長（例如「廠商名稱（收樣）」「對應客戶（報價系統）」）會
+  // 把欄位撐得很寬，改成比較短的字，完整說明改放在滑鼠移過去的 title
+  // 提示裡，資訊不會少，但欄位可以窄很多，讓整張表更容易一次塞進白色卡
+  // 片裡、不用再左右拉。
+  const headerShortLabels = {
+    '廠商名稱（收樣）': ['廠商名稱', '收樣紀錄總表裡的廠商名稱'],
+    '對應客戶（報價系統）': ['對應客戶', '比對到的報價系統客戶名稱'],
+  };
+  [...headerRow.children].forEach(th => {
+    const full = th.textContent.trim();
+    const short = headerShortLabels[full];
+    if (short) { th.textContent = short[0]; th.title = short[1]; }
+  });
+
   // 1) 每欄篩選：在標題列下面插入一列篩選輸入框（報價金額是下拉選單，
-  //    其他是文字輸入框）。min-width 讓報告號碼／報價單號這種比較長的
-  //    欄位有足夠寬度，不會被壓縮到超出格子。
+  //    其他是文字輸入框）。這裡的欄寬盡量抓緊一點：報告號碼／報價單號／
+  //    日期／報價金額這幾欄內容不會換行，寬度要剛好夠放；廠商名稱／對應
+  //    客戶／樣品名稱／取樣測項這幾欄內容本來就會自動換行（不會被截
+  //    斷），窄一點只是多幾行，不會不見，所以可以抓比較窄的寬度，讓整
+  //    張表加起來盡量塞進卡片裡，不用左右捲動。
   const filterCols = [
-    ['reportNo', '篩選報告號碼', '120px'], ['vendor', '篩選廠商名稱', '110px'],
-    ['cust', '篩選對應客戶', '110px'], ['sample', '篩選樣品名稱', '100px'],
-    ['testItem', '篩選取樣測項', '110px'], ['inDate', '篩選進件日期', '95px'],
-    ['dueDate', '篩選預定出件', '95px'], ['reportDate', '篩選報告出件日', '95px'],
-    ['quoteNo', '篩選報價單號', '130px'], ['amount', null, '95px'],
+    ['reportNo', '篩選報告號碼', '100px'], ['vendor', '篩選廠商名稱', '80px'],
+    ['cust', '篩選對應客戶', '80px'], ['sample', '篩選樣品名稱', '72px'],
+    ['testItem', '篩選取樣測項', '82px'], ['inDate', '篩選進件日期', '70px'],
+    ['dueDate', '篩選預定出件', '70px'], ['reportDate', '篩選報告出件', '70px'],
+    ['quoteNo', '篩選報價單號', '112px'], ['amount', null, '92px'],
   ];
   const filterRow = document.createElement('tr');
   filterRow.className = 'incoming-col-filter-row';
   filterCols.forEach(([key, ph, minW]) => {
     const th = document.createElement('th');
     th.style.fontWeight = 'normal';
-    th.style.padding = '4px';
+    th.style.padding = '3px 2px';
     th.style.minWidth = minW;
     let el;
     if (key === 'amount') {
@@ -444,7 +479,7 @@ function setupIncomingUiEnhancements() {
     el.dataset.colFilter = key;
     el.style.width = '100%';
     el.style.boxSizing = 'border-box';
-    el.style.fontSize = '12px';
+    el.style.fontSize = '11px';
     th.appendChild(el);
     filterRow.appendChild(th);
   });
@@ -459,12 +494,25 @@ function setupIncomingUiEnhancements() {
   filterRow.addEventListener('input', onColFilterChange);
   filterRow.addEventListener('change', onColFilterChange);
 
-  // 也順手把報告號碼／報價單號兩欄的資料儲存格 min-width 設寬一點，
+  // 資料儲存格的欄寬、內距、字級都收緊一點（跟篩選列的欄寬對應），這樣
+  // 十個欄位加起來才有機會整張塞進卡片裡，不用再左右拉。報告號碼／報價
+  // 單號／日期／報價金額這幾欄內容不換行，一定要留夠寬度；其他欄位內容
+  // 本來就會換行，窄一點只是多幾行、資料不會不見。
   // 表格重繪（body.innerHTML）不會動到這個 <style>，只要設定一次即可。
   const styleTag = document.createElement('style');
   styleTag.textContent =
-    '#incomingTableBody td:nth-child(1){min-width:120px;} ' +
-    '#incomingTableBody td:nth-child(9){min-width:130px;}';
+    '#incomingTableBody td{padding:4px 5px;font-size:12px;} ' +
+    '#incomingTableBody td:nth-child(1){min-width:100px;} ' +
+    '#incomingTableBody td:nth-child(2){min-width:80px;} ' +
+    '#incomingTableBody td:nth-child(3){min-width:80px;} ' +
+    '#incomingTableBody td:nth-child(4){min-width:72px;} ' +
+    '#incomingTableBody td:nth-child(5){min-width:82px;} ' +
+    '#incomingTableBody td:nth-child(6){min-width:70px;} ' +
+    '#incomingTableBody td:nth-child(7){min-width:70px;} ' +
+    '#incomingTableBody td:nth-child(8){min-width:70px;} ' +
+    '#incomingTableBody td:nth-child(9){min-width:112px;} ' +
+    '#incomingTableBody td:nth-child(10){min-width:92px;} ' +
+    '#incomingPagination, #incomingPaginationTop{text-align:left;}';
   document.head.appendChild(styleTag);
 
   // 2) 業績總金額：跟著目前篩選條件（月份、客戶、搜尋、每欄篩選…）即時
@@ -473,16 +521,17 @@ function setupIncomingUiEnhancements() {
   if (metaEl && !document.getElementById('incomingRevenueTotal')) {
     const box = document.createElement('div');
     box.id = 'incomingRevenueTotal';
-    box.style.cssText = 'margin:8px 0;display:flex;gap:24px;flex-wrap:wrap;';
+    box.style.cssText = 'margin:8px 0;display:flex;gap:24px;flex-wrap:wrap;text-align:left;';
     metaEl.insertAdjacentElement('afterend', box);
   }
 
-  // 3) 表格上方也放一份分頁（跟表格下方原本就有的那份同步顯示同一頁數）
+  // 3) 表格上方也放一份分頁（跟表格下方原本就有的那份同步顯示同一頁數）。
+  //    明確靠左對齊、拿掉多餘留白，排版緊湊一點。
   if (!document.getElementById('incomingPaginationTop')) {
     const topPag = document.createElement('div');
     topPag.id = 'incomingPaginationTop';
     topPag.className = 'incoming-pagination-top';
-    topPag.style.cssText = 'margin:8px 0;';
+    topPag.style.cssText = 'margin:6px 0;text-align:left;';
     table.insertAdjacentElement('beforebegin', topPag);
   }
 }
@@ -499,23 +548,34 @@ function setupIncomingAmountDelegation() {
   body.addEventListener('change', (e) => {
     const el = e.target.closest('.incoming-amt-input');
     if (!el) return;
-    onIncomingAmountChange(el.dataset.reportno, el.value);
+    onIncomingAmountChange(inRowKeyFromAttr_(el.dataset.rowkey), el.value);
   });
   body.addEventListener('click', (e) => {
     const el = e.target.closest('.incoming-amt-clear');
-    if (el) { clearIncomingAmount(el.dataset.reportno); return; }
+    if (el) { clearIncomingAmount(inRowKeyFromAttr_(el.dataset.rowkey)); return; }
   });
 }
-function onIncomingAmountChange(reportNo, rawValue) {
+// data-rowkey 屬性存的是 rowKey 經過 encodeURIComponent 之後的版本（rowKey
+// 內含報告號碼＋測項＋樣品名稱之間的分隔字元，直接放進 HTML 屬性不放心，
+// 用 encodeURIComponent 編碼過比較保險），這裡統一解碼還原。
+function inRowKeyFromAttr_(attrVal) {
+  try { return decodeURIComponent(attrVal || ''); } catch (e) { return attrVal || ''; }
+}
+function onIncomingAmountChange(rowKey, rawValue) {
   const v = String(rawValue == null ? '' : rawValue).trim();
   if (v === '') {
-    delete incomingAmountOverrides[reportNo];
+    delete incomingAmountOverrides[rowKey];
   } else {
     const num = parseFloat(v);
     if (isNaN(num)) { alert('請輸入數字'); renderIncomingTable(); return; }
-    const x = incomingRows.find(x => x.r.report_no === reportNo);
-    incomingAmountOverrides[reportNo] = {
+    // 同一個報告號碼底下可能有好幾列（好幾個測項），一定要連測項／樣品名
+    // 稱一起比對，才不會把金額誤填到「同一份報告的其他測項」上面去。
+    const x = incomingRows.find(x => incomingRowKey_(x.r) === rowKey);
+    incomingAmountOverrides[rowKey] = {
       amount: num,
+      reportNo: x ? (x.r.report_no || '') : '',
+      testItem: x ? (x.r.test_item || '') : '',
+      sample: x ? (x.r.sample || '') : '',
       vendor: x ? (x.r.vendor || '') : '',
       customer: x && x.cust ? x.cust.name : '',
       updatedAt: nowIso(),
@@ -524,8 +584,8 @@ function onIncomingAmountChange(reportNo, rawValue) {
   renderIncomingTable();
   syncIncomingAmountsToCloud();
 }
-function clearIncomingAmount(reportNo) {
-  delete incomingAmountOverrides[reportNo];
+function clearIncomingAmount(rowKey) {
+  delete incomingAmountOverrides[rowKey];
   renderIncomingTable();
   syncIncomingAmountsToCloud();
 }
@@ -585,13 +645,19 @@ function renderIncomingTable() {
       quoteNoCell = '<span style="color:#999;">（手動輸入）</span>';
     }
 
-    const reportNo = r.report_no || '';
+    // 手動輸入標記／清除鈕／需確認提醒都改成小圖示＋title 提示，不要用長
+    // 文字，避免這欄被撐得比其他欄寬很多，導致整張表又要左右拉。
+    const rowKeyAttr = encodeURIComponent(incomingRowKey_(r));
     const inputVal = info.amount != null ? info.amount : '';
-    let amtCell = '<input type="number" class="incoming-amt-input" data-reportno="' + inEsc(reportNo) + '" value="' + inEsc(inputVal) + '" placeholder="輸入金額" style="width:88px;">';
+    let amtCell = '<input type="number" class="incoming-amt-input" data-rowkey="' + rowKeyAttr + '" value="' + inEsc(inputVal) + '" placeholder="輸入金額" style="width:70px;">';
     if (info.source === 'manual') {
-      amtCell += ' <span style="color:#1565c0;font-size:11px;">(手動)</span>' +
-        '<button type="button" class="incoming-amt-clear" data-reportno="' + inEsc(reportNo) + '" title="清除手動金額，' +
-        (x.itemMatch ? '恢復自動比對的金額' : '清空') + '" style="border:none;background:none;color:#999;cursor:pointer;">✕</button>';
+      amtCell += '<button type="button" class="incoming-amt-clear" data-rowkey="' + rowKeyAttr + '" title="手動輸入的金額，點這裡清除，' +
+        (x.itemMatch ? '恢復自動比對的金額' : '清空') + '" style="border:none;background:none;color:#1565c0;cursor:pointer;padding:0 0 0 2px;font-size:12px;">✕</button>';
+      if (info.migratedAmbiguous) {
+        amtCell += '<span style="color:#e65100;font-size:11px;cursor:help;padding-left:2px;" ' +
+          'title="這是舊資料搬過來的金額：同一個報告號碼底下有好幾個測項，舊資料沒有記錄原本是打給哪一項，' +
+          '所以先套用到全部測項上，請確認這筆金額是否正確，不對的話請重新輸入">⚠</span>';
+      }
     }
 
     return '<tr>' +
@@ -651,25 +717,70 @@ function exportIncomingMatched() {
 }
 
 // ---------- 手動金額：雲端同步（跟客戶/檢驗項目/報價記錄/常用備註同一套機制） ----------
+// 雲端試算表分頁現在多存兩欄 testItem／sample（原本只有 reportNo），這樣
+// 才能唯一對應到「報告號碼底下的哪一列」，不會同一份報告的其他測項也被
+// 一起連動改到金額。
 function incomingAmountsToCloudRows() {
-  return Object.keys(incomingAmountOverrides).map(reportNo => {
-    const o = incomingAmountOverrides[reportNo] || {};
+  return Object.keys(incomingAmountOverrides).map(rowKey => {
+    const o = incomingAmountOverrides[rowKey] || {};
     return {
-      reportNo: reportNo, vendor: o.vendor || '', customer: o.customer || '',
+      reportNo: o.reportNo || '', testItem: o.testItem || '', sample: o.sample || '',
+      vendor: o.vendor || '', customer: o.customer || '',
       amount: (o.amount != null ? o.amount : ''), updatedAt: o.updatedAt || nowIso(),
     };
   });
 }
 function applyCloudIncomingAmountRows(rows) {
   const map = {};
+  const legacy = {};
   (rows || []).forEach(r => {
     const reportNo = cloudStr(r.reportNo);
     if (!reportNo) return;
     const amt = (r.amount === '' || r.amount == null) ? null : parseFloat(r.amount);
     if (amt == null || isNaN(amt)) return;
-    map[reportNo] = { amount: amt, vendor: cloudStr(r.vendor), customer: cloudStr(r.customer), updatedAt: cloudStr(r.updatedAt) };
+    // 用 testItem 這個 key 是否存在（不是是否有值）來判斷是不是舊格式：新格
+    // 式一定會送 testItem／sample 這兩個欄位（即使值是空字串），舊格式完全
+    // 沒有這兩個欄位。
+    if ('testItem' in r || 'sample' in r) {
+      const testItem = cloudStr(r.testItem), sample = cloudStr(r.sample);
+      const rowKey = incomingRowKey_({ report_no: reportNo, test_item: testItem, sample: sample });
+      map[rowKey] = {
+        amount: amt, reportNo: reportNo, testItem: testItem, sample: sample,
+        vendor: cloudStr(r.vendor), customer: cloudStr(r.customer), updatedAt: cloudStr(r.updatedAt),
+      };
+    } else {
+      legacy[reportNo] = { amount: amt, vendor: cloudStr(r.vendor), customer: cloudStr(r.customer), updatedAt: cloudStr(r.updatedAt) };
+    }
   });
   incomingAmountOverrides = map;
+  incomingLegacyAmountOverrides = legacy;
+}
+// 舊格式（只用報告號碼記手動金額）搬遷成新格式（報告號碼＋測項＋樣品名
+// 稱）：要等收樣資料（incomingRows）載入後，才知道這個報告號碼底下實際
+// 有哪些列。同一報告號碼底下只有一列的，可以直接、準確地搬過去；有好幾
+// 列（好幾個測項）的，舊資料沒辦法判斷原本是打給哪一項，為了不讓已經打
+// 過的金額憑空消失，先套用到全部列上，並標記 migratedAmbiguous，畫面上
+// 會顯示「⚠️需確認」提醒使用者個別重新確認。
+function migrateLegacyIncomingAmountOverrides_(rows) {
+  const pendingKeys = Object.keys(incomingLegacyAmountOverrides);
+  if (!pendingKeys.length) return false;
+  let migrated = false;
+  pendingKeys.forEach(reportNo => {
+    const ov = incomingLegacyAmountOverrides[reportNo];
+    const matches = rows.filter(x => x.r.report_no === reportNo);
+    if (!matches.length) return; // 目前載入的月份範圍內沒有對應的收樣紀錄，先不處理，之後月份範圍變了再試
+    matches.forEach(x => {
+      const rowKey = incomingRowKey_(x.r);
+      incomingAmountOverrides[rowKey] = {
+        amount: ov.amount, reportNo: reportNo, testItem: x.r.test_item || '', sample: x.r.sample || '',
+        vendor: ov.vendor, customer: ov.customer, updatedAt: ov.updatedAt,
+        migratedAmbiguous: matches.length > 1,
+      };
+    });
+    delete incomingLegacyAmountOverrides[reportNo];
+    migrated = true;
+  });
+  return migrated;
 }
 async function syncIncomingAmountsToCloud() {
   if (!CLOUD_ENABLED) return;
