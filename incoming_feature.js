@@ -93,26 +93,56 @@ function buildQuoteIndexByCust() {
   for (const arr of map.values()) arr.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   return map;
 }
+// 把品名／測項名稱拆成關鍵字（用標點、括號、頓號等常見分隔符號切開），
+// 用來在整串字完全不一樣、但其實講的是同一件事的時候（例如報價單品名多了
+// 或少了幾個字、換了個講法）做「關鍵字比對」。長度小於 2 的字太容易誤判，
+// 直接濾掉不用。
+function inKeywords(s) {
+  return inNorm(s)
+    .replace(/[()（）]/g, '|')
+    .split(/[、,，\/／\+\-&＆\|\s]+/)
+    .map(k => k.trim())
+    .filter(k => k.length >= 2);
+}
+
+// 品名比對分數：4 完全一致／3 整串互相包含／2 有關鍵字完全相同／
+// 1 有關鍵字互相包含（最寬鬆的「找關鍵字比對」，分數最低、畫面上標「相似」）。
+function itemMatchScore_(itemName, testItemName) {
+  const b = inNorm(itemName);
+  const t = inNorm(testItemName);
+  if (!b || !t) return 0;
+  if (b === t) return 4;
+  if (b.includes(t) || t.includes(b)) return 3;
+  const bKw = inKeywords(itemName);
+  const tKw = inKeywords(testItemName);
+  for (const k1 of bKw) {
+    for (const k2 of tKw) {
+      if (k1 === k2) return 2;
+      if (k1.includes(k2) || k2.includes(k1)) return 1;
+    }
+  }
+  return 0;
+}
+
 function findBestItemForRow(row, cust, quoteIdx) {
   const arr = quoteIdx.get(inCoreName(cust.name)) || quoteIdx.get(inCoreName(cust.short || '')) || [];
   if (!arr.length) return null;
   const testN = inNorm(row.test_item);
   if (!testN) return null;
-  let best = null, bestScore = 0;
-  // arr 已按日期新到舊排序；分數相同時越新的報價單優先（先遍歷到就不會被
-  // 後面分數相同但較舊的覆蓋，因為只在 score 嚴格更高時才替換）。
+  // arr 已按日期新到舊排序。以「最新的報價單為主」：先看最新那張報價單裡
+  // 有沒有比對得到的品項，只要有（哪怕只是關鍵字相似），就用那張的單價，
+  // 不會因為某張更早的報價單分數比較高就跳去用舊的；只有最新那張完全找
+  // 不到任何比對得到的品項時，才往下看次新的那一張，依此類推。
   for (const q of arr) {
     const items = Array.isArray(q.items) ? q.items : [];
+    let best = null, bestScore = 0;
     for (const it of items) {
-      const b = inNorm(it.item);
-      if (!b) continue;
-      let score = 0;
-      if (b === testN) score = 3;               // 完全符合
-      else if (b.includes(testN) || testN.includes(b)) score = 2; // 相似（包含關係）
+      const score = itemMatchScore_(it.item, row.test_item);
       if (score > bestScore) { bestScore = score; best = { q, it, score }; }
     }
+    if (best) return best;
   }
-  return best; // null 代表這個客戶名下找不到任何比對得到的檢驗項目
+  return null; // 這個客戶名下所有報價單都找不到任何比對得到的檢驗項目
 }
 
 // 算出某一筆收樣紀錄「目前應該顯示的金額」：手動輸入過的優先，否則用自動
