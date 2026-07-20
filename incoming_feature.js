@@ -207,10 +207,18 @@ function getRowPriceInfo(x) {
     return { amount: Number(ov.amount), source: 'manual' };
   }
   if (x.itemMatch) {
+    const mq = x.itemMatch.q;
+    const taxRate = Number(mq.taxRate) || 0;
+    let amount = Number(x.itemMatch.it.price) || 0;
+    // 報價單右下角如果有列稅金（稅率 > 0，代表這張報價單是含稅價），每個
+    // 測項抓到的金額要自動換算成含稅價；如果這張報價單本身未稅／免稅
+    // （稅率 = 0），金額維持原本抓到的優惠價，不用調整。四捨五入到整數，
+    // 跟系統其他地方金額的進位規則一致。
+    if (taxRate > 0) amount = Math.round(amount * (1 + taxRate / 100));
     return {
-      amount: Number(x.itemMatch.it.price) || 0,
+      amount,
       source: x.itemMatch.viaAlias ? 'dict' : (x.itemMatch.score >= 3 ? 'auto' : 'auto-fuzzy'),
-      quoteNo: x.itemMatch.q.quoteNo, date: x.itemMatch.q.date, itemName: x.itemMatch.it.item,
+      quoteNo: mq.quoteNo, date: mq.date, itemName: x.itemMatch.it.item,
     };
   }
   return { amount: null, source: 'none' };
@@ -314,20 +322,108 @@ async function loadIncomingData(force) {
 function inEsc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+// 每一欄各自的篩選字（表格標題下面那排篩選輸入框對應的值）：報告號碼／
+// 廠商名稱／對應客戶／樣品名稱／取樣測項／進件日期／預定出件／報告出件
+// 日／報價單號／報價金額，全部都是「不分大小寫、只要有包含到就算」的
+// 篩選（跟最上面既有的搜尋框邏輯一致），每一欄互相是「且」的關係。
+let incomingColFilters = {
+  reportNo: '', vendor: '', cust: '', sample: '', testItem: '',
+  inDate: '', dueDate: '', reportDate: '', quoteNo: '', amount: '',
+};
 function incomingFilteredRows() {
   const q = inNorm(document.getElementById('inSearch').value);
   const onlyMatched = document.getElementById('inOnlyMatched').checked;
   const custFilter = document.getElementById('inCustFilter').value;
+  const cf = incomingColFilters;
+  const needInfo = !!(q || cf.quoteNo || cf.amount);
   return incomingRows.filter(x => {
     if (onlyMatched && !x.cust) return false;
     if (custFilter && (!x.cust || x.cust.name !== custFilter)) return false;
+    const info = needInfo ? getRowPriceInfo(x) : null;
     if (q) {
-      const info = getRowPriceInfo(x);
       const hay = inNorm([x.r.report_no, x.r.vendor, x.r.sample, x.r.test_item, x.cust ? x.cust.name : '', info.quoteNo || ''].join('|'));
       if (!hay.includes(q)) return false;
     }
+    if (cf.reportNo && !inNorm(x.r.report_no).includes(inNorm(cf.reportNo))) return false;
+    if (cf.vendor && !inNorm(x.r.vendor).includes(inNorm(cf.vendor))) return false;
+    if (cf.cust && !inNorm(x.cust ? x.cust.name : '').includes(inNorm(cf.cust))) return false;
+    if (cf.sample && !inNorm(x.r.sample).includes(inNorm(cf.sample))) return false;
+    if (cf.testItem && !inNorm(x.r.test_item).includes(inNorm(cf.testItem))) return false;
+    if (cf.inDate && !String(x.r.in_date || '').includes(cf.inDate)) return false;
+    if (cf.dueDate && !String(x.r.due_date || '').includes(cf.dueDate)) return false;
+    if (cf.reportDate && !String(x.r.report_date || '').includes(cf.reportDate)) return false;
+    if (cf.quoteNo && !inNorm(info.quoteNo || '').includes(inNorm(cf.quoteNo))) return false;
+    if (cf.amount && !String(info.amount != null ? info.amount : '').includes(cf.amount)) return false;
     return true;
   });
+}
+
+// 收樣紀錄表格的「每欄篩選」輸入框、業績總金額統計、以及表格上方的分頁
+// ——這三個都是用 JS 動態插入 DOM，不是寫死在主頁面 HTML 裡，這樣之後要
+// 調整只需要改這支檔案，不用去動主頁面的 HTML 結構。只在第一次渲染收樣
+// 紀錄表格時執行一次，之後表格重繪（body.innerHTML）不會影響到這些已經
+// 插入好的元素。
+let incomingUiEnhanced = false;
+function setupIncomingUiEnhancements() {
+  if (incomingUiEnhanced) return;
+  const tbody = document.getElementById('incomingTableBody');
+  if (!tbody) return;
+  const table = tbody.closest('table');
+  const thead = table ? table.querySelector('thead') : null;
+  const headerRow = thead ? thead.querySelector('tr') : null;
+  if (!table || !thead || !headerRow) return;
+  incomingUiEnhanced = true;
+
+  // 1) 每欄篩選：在標題列下面插入一列篩選輸入框
+  const filterCols = [
+    ['reportNo', '篩選報告號碼'], ['vendor', '篩選廠商名稱'], ['cust', '篩選對應客戶'],
+    ['sample', '篩選樣品名稱'], ['testItem', '篩選取樣測項'], ['inDate', '篩選進件日期'],
+    ['dueDate', '篩選預定出件'], ['reportDate', '篩選報告出件日'], ['quoteNo', '篩選報價單號'],
+    ['amount', '篩選報價金額'],
+  ];
+  const filterRow = document.createElement('tr');
+  filterRow.className = 'incoming-col-filter-row';
+  filterCols.forEach(([key, ph]) => {
+    const th = document.createElement('th');
+    th.style.fontWeight = 'normal';
+    th.style.padding = '4px';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = ph;
+    input.dataset.colFilter = key;
+    input.style.width = '100%';
+    input.style.boxSizing = 'border-box';
+    input.style.fontSize = '12px';
+    th.appendChild(input);
+    filterRow.appendChild(th);
+  });
+  headerRow.insertAdjacentElement('afterend', filterRow);
+  filterRow.addEventListener('input', (e) => {
+    const el = e.target.closest('[data-col-filter]');
+    if (!el) return;
+    incomingColFilters[el.dataset.colFilter] = el.value;
+    incomingPage = 1;
+    renderIncomingTable();
+  });
+
+  // 2) 業績總金額：跟著目前篩選條件（月份、客戶、搜尋、每欄篩選…）即時
+  //    變動，不是固定寫死的總數。
+  const metaEl = document.getElementById('incomingMeta');
+  if (metaEl && !document.getElementById('incomingRevenueTotal')) {
+    const box = document.createElement('div');
+    box.id = 'incomingRevenueTotal';
+    box.style.cssText = 'margin:8px 0;font-size:16px;font-weight:bold;color:#1565c0;';
+    metaEl.insertAdjacentElement('afterend', box);
+  }
+
+  // 3) 表格上方也放一份分頁（跟表格下方原本就有的那份同步顯示同一頁數）
+  if (!document.getElementById('incomingPaginationTop')) {
+    const topPag = document.createElement('div');
+    topPag.id = 'incomingPaginationTop';
+    topPag.className = 'incoming-pagination-top';
+    topPag.style.cssText = 'margin:8px 0;';
+    table.insertAdjacentElement('beforebegin', topPag);
+  }
 }
 
 // 收樣資料表格的金額欄位是可編輯輸入框，用事件代理（而不是每一列各自綁
@@ -375,6 +471,7 @@ function clearIncomingAmount(reportNo) {
 
 function renderIncomingTable() {
   setupIncomingAmountDelegation();
+  setupIncomingUiEnhancements();
   const body = document.getElementById('incomingTableBody');
   const meta = document.getElementById('incomingMeta');
   const list = incomingFilteredRows();
@@ -386,6 +483,18 @@ function renderIncomingTable() {
     ' 筆；比對到報價客戶 ' + matchedAll.length + ' 筆（' + custSet.size + ' 個客戶）；' +
     '已有金額 ' + priced.length + ' 筆，合計 ' + (typeof fmt === 'function' ? fmt(pricedTotal) : ('$' + pricedTotal)) +
     '；目前顯示 ' + list.length + ' 筆';
+
+  // 業績總金額：只算「目前篩選條件下」看得到的這些列（不受分頁影響，是
+  // 全部符合篩選的加總），月份範圍、客戶、搜尋、每欄篩選改變時都會跟著
+  // 重新計算。
+  const revBox = document.getElementById('incomingRevenueTotal');
+  if (revBox) {
+    const filteredPriced = list.map(getRowPriceInfo).filter(p => p.amount != null);
+    const filteredTotal = filteredPriced.reduce((s, p) => s + p.amount, 0);
+    revBox.textContent = '業績總金額（目前篩選條件）：' +
+      (typeof fmt === 'function' ? fmt(filteredTotal) : ('$' + filteredTotal)) +
+      '（' + filteredPriced.length + ' 筆有金額）';
+  }
 
   const totalPages = Math.max(1, Math.ceil(list.length / INCOMING_PAGE_SIZE));
   if (incomingPage > totalPages) incomingPage = totalPages;
@@ -432,11 +541,15 @@ function renderIncomingTable() {
       '</tr>';
   }).join('');
 
-  const pag = document.getElementById('incomingPagination');
-  pag.innerHTML = totalPages <= 1 ? '' :
+  const pagHtml = totalPages <= 1 ? '' :
     '<button class="btn-ghost" ' + (incomingPage <= 1 ? 'disabled' : '') + ' onclick="incomingPage--; renderIncomingTable()">上一頁</button>' +
     '<span style="margin:0 10px;">第 ' + incomingPage + ' / ' + totalPages + ' 頁</span>' +
     '<button class="btn-ghost" ' + (incomingPage >= totalPages ? 'disabled' : '') + ' onclick="incomingPage++; renderIncomingTable()">下一頁</button>';
+  // 上下都放一份分頁按鈕，方便長清單捲到最下面時也能直接翻頁。
+  const pag = document.getElementById('incomingPagination');
+  if (pag) pag.innerHTML = pagHtml;
+  const pagTop = document.getElementById('incomingPaginationTop');
+  if (pagTop) pagTop.innerHTML = pagHtml;
 }
 
 let incomingQuoteCountAtLoad = -1;
