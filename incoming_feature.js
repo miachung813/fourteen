@@ -41,6 +41,10 @@ function getItemAliasMap_() {
 // ---------- 名稱正規化與智慧比對 ----------
 function inNorm(s) {
   s = String(s == null ? '' : s).trim();
+  // Unicode 正規化（NFKC）：把 CJK 相容表意文字（例如某些舊系統／Word 貼上
+  // 常見的相容字，如 U+F9D0「類」）統一轉成標準字（U+985E「類」），避免
+  // 兩個字看起來一模一樣、卻因為底層碼位不同而比對不起來。
+  s = s.normalize('NFKC');
   // 全形轉半形
   s = s.replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' ');
   s = s.toLowerCase();
