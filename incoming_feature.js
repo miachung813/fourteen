@@ -639,6 +639,38 @@ function renderIncomingDailySummary(list) {
     '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
 }
 
+// 每日進件彙總頁的篩選欄使用獨立的一組 DOM 元素（id 前綴 inDaily），但
+// 篩選邏輯完全共用「收樣紀錄」頁面既有的 #in... 主控制項，兩邊只是畫面
+// 分開、狀態是同一份。每日彙總頁的控制項 onchange/oninput 會先把值寫回
+// 主控制項並觸發 loadIncomingData()／renderIncomingTable()，這個函式則
+// 在每次 renderIncomingTable() 執行時，把主控制項目前的月份選項、選取
+// 值、客戶清單、搜尋字、勾選狀態，單向鏡射回每日彙總頁的控制項，讓兩頁
+// 畫面隨時保持一致；用 document.activeElement 跳過使用者正在操作中的
+// 那個元素，避免游標被打斷。
+function syncIncomingDailyControls() {
+  const pairs = [
+    ['inFromYm', 'inDailyFromYm', 'select'],
+    ['inToYm', 'inDailyToYm', 'select'],
+    ['inCustFilter', 'inDailyCustFilter', 'select'],
+    ['inSearch', 'inDailySearch', 'text'],
+    ['inOnlyMatched', 'inDailyOnlyMatched', 'checkbox'],
+  ];
+  const active = document.activeElement;
+  for (const [mainId, dailyId, kind] of pairs) {
+    const main = document.getElementById(mainId);
+    const daily = document.getElementById(dailyId);
+    if (!main || !daily || daily === active) continue;
+    if (kind === 'select') {
+      if (daily.innerHTML !== main.innerHTML) daily.innerHTML = main.innerHTML;
+      if (daily.value !== main.value) daily.value = main.value;
+    } else if (kind === 'checkbox') {
+      daily.checked = main.checked;
+    } else {
+      daily.value = main.value;
+    }
+  }
+}
+
 function renderIncomingTable() {
   setupIncomingAmountDelegation();
   setupIncomingUiEnhancements();
@@ -646,6 +678,7 @@ function renderIncomingTable() {
   const meta = document.getElementById('incomingMeta');
   const list = incomingFilteredRows();
   renderIncomingDailySummary(list);
+  syncIncomingDailyControls();
   const matchedAll = incomingRows.filter(x => x.cust);
   const custSet = new Set(matchedAll.map(x => x.cust.name));
   const priced = incomingRows.map(getRowPriceInfo).filter(p => p.amount != null);
