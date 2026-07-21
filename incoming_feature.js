@@ -525,17 +525,6 @@ function setupIncomingUiEnhancements() {
     metaEl.insertAdjacentElement('afterend', box);
   }
 
-  // 2.5) 每日進件彙總：依目前篩選條件，把收樣紀錄依「進件日期」分組，
-  //      顯示當天有哪些客戶進件（含各客戶當天筆數）與當天總金額（沒抓到
-  //      金額、也沒手動輸入的算 0，之後有金額了畫面會自動更新）。
-  const revenueBoxEl = document.getElementById('incomingRevenueTotal');
-  if (revenueBoxEl && !document.getElementById('incomingDailySummary')) {
-    const dailyBox = document.createElement('div');
-    dailyBox.id = 'incomingDailySummary';
-    dailyBox.style.cssText = 'margin:8px 0;';
-    revenueBoxEl.insertAdjacentElement('afterend', dailyBox);
-  }
-
   // 3) 表格上方也放一份分頁（跟表格下方原本就有的那份同步顯示同一頁數）。
   //    明確靠左對齊、拿掉多餘留白，排版緊湊一點。
   if (!document.getElementById('incomingPaginationTop')) {
@@ -622,10 +611,14 @@ function renderIncomingDailySummary(list) {
   const fmtNum = (n) => (typeof fmt === 'function' ? fmt(n) : ('$' + n));
   const rowsHtml = dates.map(d => {
     const g = byDate.get(d);
-    const total = g.rows.reduce((s, x) => {
+    let untaxedTotal = 0, taxedTotal = 0;
+    for (const x of g.rows) {
       const info = getRowPriceInfo(x);
-      return s + (info.amount != null ? info.amount : 0);
-    }, 0);
+      const amt = info.amount != null ? info.amount : 0;
+      const amtUntaxed = info.amountUntaxed != null ? info.amountUntaxed : amt;
+      taxedTotal += amt;
+      untaxedTotal += amtUntaxed;
+    }
     const custList = Array.from(g.custCounts.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([name, cnt]) => inEsc(name) + (cnt > 1 ? '×' + cnt : ''))
@@ -634,14 +627,15 @@ function renderIncomingDailySummary(list) {
       '<td class="nowrap">' + inEsc(d) + '</td>' +
       '<td>' + custList + '</td>' +
       '<td class="nowrap">' + g.rows.length + ' 筆</td>' +
-      '<td class="nowrap">' + fmtNum(total) + '</td>' +
+      '<td class="nowrap">' + fmtNum(untaxedTotal) + '</td>' +
+      '<td class="nowrap">' + fmtNum(taxedTotal) + '</td>' +
       '</tr>';
   }).join('');
   box.innerHTML =
-    '<div style="margin:4px 0 6px;font-weight:bold;color:#333;">每日進件彙總（依目前篩選條件）</div>' +
-    '<div class="table-scroll" style="max-height:260px;overflow:auto;border:1px solid #e0e0e0;border-radius:4px;">' +
+    '<div class="table-scroll" style="border:1px solid #e0e0e0;border-radius:4px;">' +
     '<table class="db-table" style="font-size:12px;"><thead><tr>' +
-    '<th style="width:14%;">進件日期</th><th>當日客戶（進件筆數）</th><th style="width:10%;">進件筆數</th><th style="width:14%;">當日總金額</th>' +
+    '<th style="width:12%;">進件日期</th><th>當日客戶（進件筆數）</th><th style="width:8%;">進件筆數</th>' +
+    '<th style="width:13%;">當日總金額（未稅）</th><th style="width:13%;">當日總金額（含稅）</th>' +
     '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
 }
 
@@ -746,6 +740,11 @@ function renderIncomingPage() {
   const qc = (typeof quoteHistory !== 'undefined' && Array.isArray(quoteHistory)) ? quoteHistory.length : 0;
   if (!incomingLoading && (!incomingRows.length || qc !== incomingQuoteCountAtLoad)) loadIncomingData();
   else renderIncomingTable();
+}
+function renderIncomingDailyPage() {
+  const qc = (typeof quoteHistory !== 'undefined' && Array.isArray(quoteHistory)) ? quoteHistory.length : 0;
+  if (!incomingLoading && (!incomingRows.length || qc !== incomingQuoteCountAtLoad)) loadIncomingData();
+  else renderIncomingDailySummary(incomingFilteredRows());
 }
 
 function exportIncomingMatched() {
