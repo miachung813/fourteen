@@ -85,6 +85,23 @@ function inHasBracketQualifier(s) {
   return /[()（）]/.test(String(s == null ? '' : s));
 }
 
+// 客戶名稱如果在「公司類型字尾」（股份有限公司、有限公司…）後面還接著其他
+// 文字（例如「味全食品工業股份有限公司高雄廠」「會昌實業股份有限公司屏東
+// 分公司」），代表這是總公司底下特定的分公司/分廠/營業處，跟只寫到公司
+// 類型字尾為止的名稱本身（例如單純的「味全食品工業股份有限公司」）並不是
+// 同一回事，道理跟括號部門/系館一樣：不應該讓「公司本名」這種比較短的
+// 廠商名稱用「包含關係」模糊比對到分支機構，例如「味全食品工業股份有限
+// 公司」不等於「味全食品工業股份有限公司高雄廠」，兩者只在名稱完全一致
+// 時才算比對得到。
+function inHasBranchQualifier(s) {
+  const n = inNorm(s);
+  for (const suf of IN_SUFFIXES) {
+    const idx = n.indexOf(suf);
+    if (idx !== -1 && idx + suf.length < n.length) return true;
+  }
+  return false;
+}
+
 // 建立客戶比對索引（每次載入資料時重建，確保吃到最新客戶資料庫）
 function buildIncomingCustIndex() {
   const exact = new Map();   // 完整正規化名稱 -> cust
@@ -98,7 +115,7 @@ function buildIncomingCustIndex() {
       if (n && !exact.has(n)) exact.set(n, c);
       if (k && !core.has(k)) {
         core.set(k, c);
-        if (!inHasBracketQualifier(nm)) coreList.push([k, c]);
+        if (!inHasBracketQualifier(nm) && !inHasBranchQualifier(nm)) coreList.push([k, c]);
       }
     }
   }
