@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" translate="no">
+<head>
+<meta charset="UTF-8">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台灣八大營養標示</title>
+<style>
+  :root{
+    --ink:#15191c;
+    --ink-soft:#4a5258;
+    --paper:#eef1f0;
+    --card:#ffffff;
+    --line:#d5dad8;
+    --accent:#0e5a50;
+    --accent-soft:#e2efec;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Helvetica Neue",Arial,"PingFang TC","Microsoft JhengHei",sans-serif;
+    line-height:1.5;
+  }
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:20px 28px;}
+  header .eyebrow{
+    font-size:12px;letter-spacing:.18em;color:var(--accent);
+    text-transform:uppercase;font-weight:700;margin-bottom:4px;
+  }
+  header h1{margin:0;font-size:22px;font-weight:800;}
+
+  .wrap{
+    display:grid;grid-template-columns:minmax(340px,1fr) minmax(340px,440px);
+    gap:24px;padding:24px 28px 60px;max-width:1200px;margin:0 auto;align-items:start;
+  }
+  @media (max-width:900px){
+    .wrap{grid-template-columns:1fr;}
+    .preview-col{position:static !important;}
+  }
+
+  .panel{
+    background:var(--card);border:1px solid var(--line);
+    border-radius:10px;padding:20px 22px;margin-bottom:20px;
+  }
+  .panel h2{
+    margin:0 0 14px;font-size:14px;letter-spacing:.08em;
+    color:var(--accent);font-weight:800;text-transform:uppercase;
+    border-bottom:2px solid var(--accent-soft);padding-bottom:8px;
+  }
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;}
+  @media (max-width:520px){.grid2{grid-template-columns:1fr;}}
+
+  label.field{display:block;font-size:12.5px;color:var(--ink-soft);font-weight:600;}
+  .field input,.field select{
+    width:100%;margin-top:4px;padding:8px 10px;font-size:14px;
+    border:1px solid var(--line);border-radius:6px;
+    background:#fcfdfd;color:var(--ink);font-family:var(--mono);
+  }
+  .field select{font-family:inherit;}
+  .field input:focus,.field select:focus{
+    outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);
+  }
+  .chk{
+    display:flex;align-items:center;gap:8px;margin-top:10px;
+    font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;
+  }
+  .chk input{width:auto;margin:0;}
+
+  table.calc{width:100%;border-collapse:collapse;font-size:13px;}
+  table.calc th,table.calc td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;}
+  table.calc th{
+    font-size:11.5px;letter-spacing:.05em;color:var(--ink-soft);
+    text-transform:uppercase;border-bottom:2px solid var(--line);
+  }
+  table.calc td.num{font-family:var(--mono);text-align:right;}
+  table.calc td input{
+    width:104px;padding:5px 8px;font-size:13.5px;text-align:right;
+    border:1px solid var(--line);border-radius:5px;background:#fcfdfd;font-family:var(--mono);
+  }
+  table.calc td input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  table.calc tr.sub td:first-child{padding-left:22px;color:var(--ink-soft);}
+  table.calc tr.auto-row td{background:var(--accent-soft);font-weight:700;}
+  table.calc tr.auto-row td.num{color:var(--accent);font-family:var(--mono);}
+  .auto-tag{
+    display:inline-block;margin-left:8px;padding:1px 7px;font-size:10px;
+    font-weight:600;border-radius:10px;background:var(--accent);color:#fff;vertical-align:middle;
+  }
+  .note{font-size:12px;color:var(--ink-soft);margin-top:10px;line-height:1.6;}
+  .note strong{color:var(--ink);}
+  .warn{
+    display:none;margin-top:10px;padding:10px 12px;border-radius:6px;
+    background:#fdecea;border:1px solid #e74c3c;color:#c0392b;font-size:12.5px;line-height:1.5;
+  }
+  .warn.note-warn{
+    background:#fff6e5;border-color:#e08e0b;color:#8a5a00;
+  }
+
+  .preview-col{position:sticky;top:20px;}
+  .toolbar{display:flex;gap:10px;margin-bottom:14px;}
+  .toolbar button{
+    flex:1;padding:10px 12px;font-size:14px;font-weight:700;
+    border-radius:8px;border:1px solid var(--accent);cursor:pointer;
+  }
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:#0b4a42;}
+  .btn-ghost{background:#fff;color:var(--accent);}
+  .btn-ghost:hover{background:var(--accent-soft);}
+
+  /* ===== 營養標示（台灣格式）===== */
+  .sheet{background:#fff;padding:18px 20px 14px;box-shadow:0 8px 24px rgba(20,40,35,.12);}
+  .inner{max-width:360px;margin:0 auto;}
+  .sheet-product{
+    font-size:12.5px;color:#000;margin-bottom:10px;
+    font-family:"PingFang TC","Microsoft JhengHei",sans-serif;
+  }
+  table.tw{
+    width:100%;border-collapse:collapse;border:1.5px solid #000;color:#000;
+    font-family:"PingFang TC","Microsoft JhengHei",sans-serif;font-size:13px;
+  }
+  table.tw td{padding:2px 8px;}
+  table.tw tr.cap td{
+    text-align:center;font-size:16px;font-weight:800;padding:5px 0;
+    border-bottom:1px solid #000;
+  }
+  table.tw tr.hd td{border-bottom:1px solid #000;}
+  table.tw td.c1{text-align:left;}
+  table.tw td.c2,table.tw td.c3{text-align:right;white-space:nowrap;}
+  table.tw td.ind{padding-left:24px;}
+  table.tw td.lft{text-align:left;}
+  table.tw td.szrow{text-align:left;}
+  .sz-lab{display:inline-block;min-width:5.4em;}
+  .sz-val{display:inline-block;min-width:3.8em;text-align:right;}
+  .sz-unit{display:inline-block;margin-left:.9em;}
+  .tw-foot{
+    font-size:10.5px;line-height:1.5;color:#000;margin-top:4px;
+    font-family:"PingFang TC","Microsoft JhengHei",sans-serif;
+  }
+  .tw-foot:empty{display:none;}
+  .sheet-disclaimer{
+    text-align:left;font-size:11.5px;font-weight:700;color:#000;margin-top:12px;
+    font-family:"PingFang TC","Microsoft JhengHei",sans-serif;
+  }
+
+  @media print{
+    body *{visibility:hidden;}
+    #labelArea,#labelArea *{visibility:visible;}
+    #labelArea{position:absolute;left:0;top:0;width:100%;}
+    .sheet{box-shadow:none;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+    <div>
+      <div class="eyebrow">Taiwan · TFDA</div>
+      <h1>台灣八大營養標示</h1>
+    </div>
+    <a href="index.html" style="font-size:13px;color:var(--accent);text-decoration:none;border:1px solid var(--accent);border-radius:6px;padding:6px 12px;white-space:nowrap;">← 切換國別</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div><!-- 左欄 -->
+
+    <div class="panel">
+      <h2>產品與份量資訊</h2>
+      <div class="grid2">
+        <label class="field" style="grid-column:1/-1;">產品名稱
+          <input type="text" id="productName" value="" placeholder="例：黑芝麻蛋糕">
+        </label>
+        <label class="field">每一份量
+          <input type="number" id="servingSize" step="any" min="0" value="" placeholder="例：380">
+        </label>
+        <label class="field">單位
+          <select id="unit">
+            <option value="公克" selected>公克</option>
+            <option value="毫升">毫升</option>
+          </select>
+        </label>
+        <label class="field">本包裝含
+          <input type="number" id="servingsPer" step="any" min="0" value="" placeholder="例：1">
+        </label>
+        <label class="field">標示格式
+          <select id="format">
+            <option value="1" selected>格式一（每份＋每100）</option>
+            <option value="2">格式二（每份＋每日參考值百分比）</option>
+          </select>
+        </label>
+      </div>
+      <label class="chk"><input type="checkbox" id="showFiber"> 增加膳食纖維欄位</label>
+    </div>
+
+    <div class="panel">
+      <h2>檢驗數值（每 100 公克／100 毫升）</h2>
+      <table class="calc">
+        <thead>
+          <tr><th>測項</th><th style="text-align:right;">檢測數值</th><th style="text-align:right;">單位</th></tr>
+        </thead>
+        <tbody>
+          <tr class="auto-row"><td>熱量<span class="auto-tag">自動計算</span></td><td class="num" id="raw_cal">–</td><td class="num">大卡</td></tr>
+          <tr><td>蛋白質</td><td class="num"><input id="in_protein" type="number" step="any" min="0" value=""></td><td class="num">公克</td></tr>
+          <tr><td>脂肪</td><td class="num"><input id="in_fat" type="number" step="any" min="0" value=""></td><td class="num">公克</td></tr>
+          <tr class="sub"><td>飽和脂肪</td><td class="num"><input id="in_satfat" type="number" step="any" min="0" value=""></td><td class="num">公克</td></tr>
+          <tr class="sub"><td>反式脂肪</td><td class="num"><input id="in_transfat" type="number" step="any" min="0" value=""></td><td class="num">公克</td></tr>
+          <tr><td>碳水化合物</td><td class="num"><input id="in_carb" type="number" step="any" min="0" value=""></td><td class="num">公克</td></tr>
+          <tr class="sub"><td>糖</td><td class="num"><input id="in_sugar" type="number" step="any" min="0" value=""></td><td class="num">公克</td></tr>
+          <tr class="sub" id="row_fiber_in"><td>膳食纖維</td><td class="num"><input id="in_fiber" type="number" step="any" min="0" value=""></td><td class="num">公克</td></tr>
+          <tr><td>鈉</td><td class="num"><input id="in_sodium" type="number" step="any" min="0" value=""></td><td class="num">毫克</td></tr>
+        </tbody>
+      </table>
+      <div class="warn" id="warnBox"></div>
+      <div class="warn note-warn" id="zeroWarnBox" style="display:block;">
+        ⚠ <strong>填 0 前請先核對</strong>：依應遵行事項第八點，蛋白質、脂肪或碳水化合物<strong>項下之個別營養素</strong>（飽和脂肪、反式脂肪、糖）實際含量若<strong>不得</strong>以「０」標示，則其上層的蛋白質、脂肪或碳水化合物<strong>亦不得</strong>標 0，兩者都應標出實際檢測值，且不得宣稱「無脂肪」等。
+      </div>
+      <p class="note">
+        ＊<strong>得以「０」標示之條件</strong>（依應遵行事項附表二，<strong>每份及每 100 公克（或毫升）兩者皆須符合</strong>）：<br>
+        蛋白質、脂肪、碳水化合物、糖：該營養素量不超過 0.5 公克；飽和脂肪：不超過 0.1 公克；反式脂肪：總脂肪不超過 1.0 公克，或反式脂肪量不超過 0.3 公克；鈉：不超過 5 毫克；熱量：不超過 4 大卡，且碳水化合物、糖、蛋白質、脂肪、反式脂肪、飽和脂肪含量皆符合得以「０」標示之條件。<br>
+        ＊依應遵行事項第八點，蛋白質、脂肪或碳水化合物<strong>項下之個別營養素，其實際含量不得以「０」標示者，該蛋白質、脂肪或碳水化合物亦不得以「０」標示</strong>。<br>
+        ＊「不超過」包含該值（≦）。若數值符合得以標示為 0 之條件，且不想顯示於標示上，請直接於上方欄位輸入「0」。
+      </p>
+    </div>
+
+  </div>
+
+  <div class="preview-col"><!-- 右欄 -->
+    <div class="toolbar">
+      <button class="btn-primary" onclick="downloadPNG()">下載 PNG</button>
+      <button class="btn-ghost" onclick="window.print()">列印</button>
+    </div>
+
+    <div id="labelArea">
+      <div class="sheet" id="sheetArea">
+        <div class="inner">
+          <div class="sheet-product" id="lbl_product"></div>
+          <table class="tw">
+            <tbody id="twBody"></tbody>
+          </table>
+          <div class="tw-foot" id="twFoot"></div>
+          <div class="sheet-disclaimer">此營養標示所提供之換算結果與表格僅供參考，請以最新公告法規內容為準。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+"use strict";
+
+/* 每日參考值（衛福部公告）；反式脂肪、糖、膳食纖維尚未訂定 → 標「＊」 */
+const DV = { cal:2000, protein:60, fat:60, satfat:18, carb:300, sodium:2000 };
+
+function round(v, d){ const f = Math.pow(10, d||0); return Math.sign(v)*Math.round(Math.abs(v)*f + 1e-9)/f; }
+function num(id){
+  const el = document.getElementById(id); if(!el) return 0;
+  const v = parseFloat(el.value);
+  // 檢驗數值不應為負；負值一律視為 0，避免熱量等換算結果失真
+  return (isFinite(v) && v > 0) ? v : 0;
+}
+function filled(id){ const el = document.getElementById(id); return el && el.value.trim() !== ''; }
+function esc(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+/* A類（熱量、蛋白質、脂肪、碳水化合物）
+   0 → 0.0；<0.01 → 三位小數；≤0.05 → 兩位小數；其餘 → 一位小數
+   （<0.01 顯示三位係依 Q6.7「修整至小數點後一位仍無法顯示數值時，得如實標示實際含量」，
+     並與飽和脂肪、糖等 B 類項目的顯示方式一致）                          */
+function valA(v){
+  if (round(v,10) === 0) return 0;
+  if (v < 0.01) return round(v,3);
+  if (v <= 0.05) return round(v,2);
+  return round(v,1);
+}
+function fmtA(v){
+  if (round(v,10) === 0) return '0.0';
+  if (v < 0.01) return v.toFixed(3);
+  if (v <= 0.05) return v.toFixed(2);
+  return round(v,1).toFixed(1);
+}
+/* B類（飽和脂肪、反式脂肪、糖、膳食纖維、鈉）
+   0 → 0.0；<0.01 → 三位小數；≥0.1 → 一位小數；其餘 → 兩位小數 */
+function valB(v){
+  if (round(v,5) === 0) return 0;
+  if (v < 0.01) return round(v,3);
+  if (v >= 0.1) return round(v,1);
+  return round(v,2);
+}
+function fmtB(v){
+  if (round(v,5) === 0) return '0.0';
+  if (v < 0.01) return v.toFixed(3);
+  if (v >= 0.1) return round(v,1).toFixed(1);
+  return round(v,2).toFixed(2);
+}
+/* 每100欄：公克類一律一位小數 */
+function fmtG(v){ return round(v,1).toFixed(1); }
+/* 每100欄的熱量與鈉：整數不帶小數，否則一位小數 */
+function fmt100(v){ return (v % 1 === 0) ? String(v) : round(v,1).toFixed(1); }
+/* 每日參考值百分比（以每份標示值計算，一位小數） */
+function pct(v, dv){ return (v/dv*100).toFixed(1) + '%'; }
+
+function recalc(){
+  const fmt        = document.getElementById('format').value;      // '1' | '2'
+  const showFiber  = document.getElementById('showFiber').checked;
+  const unit       = document.getElementById('unit').value;        // 公克 | 毫升
+  const serving    = num('servingSize');
+  const servingsPer= document.getElementById('servingsPer').value.trim();
+
+  document.getElementById('row_fiber_in').style.display = showFiber ? '' : 'none';
+
+  const P = num('in_protein'), F = num('in_fat'), SF = num('in_satfat'),
+        TF = num('in_transfat'), C = num('in_carb'), S = num('in_sugar'),
+        FB = num('in_fiber'), NA_ = num('in_sodium');
+
+  /* 熱量（每100）= 蛋白質×4 + 脂肪×9 +（碳水−膳食纖維）×4 + 膳食纖維×2
+     未標示膳食纖維時，碳水化合物全額以 4 大卡計                        */
+  const cal100 = showFiber
+    ? (P*4 + F*9 + (C - FB)*4 + FB*2)
+    : (P*4 + F*9 + C*4);
+
+  const hasMacro = filled('in_protein') || filled('in_fat') || filled('in_carb');
+  document.getElementById('raw_cal').textContent = hasMacro ? round(cal100, 1) : '–';
+
+  const per = v => v / 100 * serving;
+
+  /* N/A 判定（對應 Excel）
+     1. 飽和＋反式 > 脂肪
+     2. 糖（＋膳食纖維）> 碳水化合物                                    */
+  const fatInvalid  = filled('in_fat') && (SF + TF) > F + 1e-9;
+  const carbSub     = showFiber ? (S + FB) : S;
+  const carbInvalid = filled('in_carb') && carbSub > C + 1e-9;
+
+  const warns = [];
+  if (fatInvalid)  warns.push('飽和脂肪＋反式脂肪（' + round(SF+TF,2) + ' 公克）已超過脂肪（' + round(F,2) + ' 公克）');
+  if (carbInvalid) warns.push('糖' + (showFiber ? '＋膳食纖維' : '') + '（' + round(carbSub,2) + ' 公克）已超過碳水化合物（' + round(C,2) + ' 公克）');
+
+  const wb = document.getElementById('warnBox');
+  if (warns.length){
+    wb.style.display = 'block';
+    wb.innerHTML = '⚠ 資料異常：' + warns.join('；') + '。請檢查檢驗數值，標示上該項已顯示為 N/A。';
+  } else {
+    wb.style.display = 'none';
+  }
+
+  /* 組出各列：名稱、每份值、每100值或百分比、單位 */
+  const rows = [
+    {n:'熱量',       ind:0, u:'大卡', p100: showFiber ? fmtG(cal100) : fmt100(cal100),
+                                      serv:fmtA(per(cal100)), val:valA(per(cal100)), dv:DV.cal},
+    {n:'蛋白質',     ind:0, u:'公克', p100:fmtG(P),  serv:fmtA(per(P)),  val:valA(per(P)),  dv:DV.protein},
+    {n:'脂肪',       ind:0, u:'公克', p100:fmtG(F),  serv:fmtA(per(F)),  val:valA(per(F)),  dv:DV.fat,    na:fatInvalid},
+    {n:'飽和脂肪',   ind:1, u:'公克', p100:fmtG(SF), serv:fmtB(per(SF)), val:valB(per(SF)), dv:DV.satfat},
+    {n:'反式脂肪',   ind:1, u:'公克', p100:fmtG(TF), serv:fmtB(per(TF)), val:valB(per(TF)), dv:null},
+    {n:'碳水化合物', ind:0, u:'公克', p100:fmtG(C),  serv:fmtA(per(C)),  val:valA(per(C)),  dv:DV.carb,   na:carbInvalid},
+    {n:'糖',         ind:1, u:'公克', p100:fmtG(S),  serv:fmtB(per(S)),  val:valB(per(S)),  dv:null},
+  ];
+  if (showFiber){
+    rows.push({n:'膳食纖維', ind:1, u:'公克', p100:fmtG(FB), serv:fmtB(per(FB)), val:valB(per(FB)), dv:null});
+  }
+  rows.push({n:'鈉', ind:0, u:'毫克', p100:fmt100(NA_), serv:fmtB(per(NA_)), val:valB(per(NA_)), dv:DV.sodium});
+
+  /* 產生表格 */
+  const unitTxt = unit;
+  let html = '';
+  html += '<tr class="cap"><td colspan="3">營養標示</td></tr>';
+  html += '<tr><td class="szrow" colspan="3">'
+        + '<span class="sz-lab">每一份量</span>'
+        + '<span class="sz-val">' + (serving ? esc(String(serving)) : '') + '</span>'
+        + '<span class="sz-unit">' + (serving ? esc(unitTxt) : '') + '</span></td></tr>';
+  html += '<tr class="hd"><td class="szrow" colspan="3">'
+        + '<span class="sz-lab">本包裝含</span>'
+        + '<span class="sz-val">' + (servingsPer ? esc(servingsPer) : '') + '</span>'
+        + '<span class="sz-unit">' + (servingsPer ? '份' : '') + '</span></td></tr>';
+
+  const col3Head = (fmt === '1') ? ('每 100 ' + unitTxt) : '每日參考值百分比';
+  html += '<tr class="hd"><td class="c1"></td><td class="c2">每份</td><td class="c3">' + esc(col3Head) + '</td></tr>';
+
+  rows.forEach(r => {
+    const name = '<td class="c1' + (r.ind ? ' ind' : '') + '">' + esc(r.n) + '</td>';
+    const cell2 = r.na ? 'N/A' : (esc(r.serv) + ' ' + esc(r.u));
+    let cell3;
+    if (fmt === '1'){
+      cell3 = r.na ? 'N/A' : (esc(r.p100) + ' ' + esc(r.u));
+    } else {
+      cell3 = r.dv == null ? '＊' : (r.na ? 'N/A' : pct(r.val, r.dv));
+    }
+    html += '<tr>' + name + '<td class="c2">' + cell2 + '</td><td class="c3">' + cell3 + '</td></tr>';
+  });
+
+  document.getElementById('twBody').innerHTML = html;
+
+  document.getElementById('twFoot').innerHTML = (fmt === '2')
+    ? '標示"＊"為營養素其參考值尚未訂定。<br>每日參考值：熱量 2000 大卡、蛋白質 60 公克、脂肪 60 公克、飽和脂肪 18 公克、碳水化合物 300 公克、鈉 2000 毫克。'
+    : '';
+
+
+  const pn = document.getElementById('productName').value.trim();
+  document.getElementById('lbl_product').textContent = pn ? '產品：' + pn : '';
+}
+
+function downloadPNG(){
+  const sheet = document.getElementById('sheetArea');
+  const run = () => html2canvas(sheet, {scale: 4, backgroundColor: '#ffffff'}).then(canvas => {
+    const a = document.createElement('a');
+    a.download = (document.getElementById('productName').value.trim() || 'nutrition-tw') + '.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  }).catch(() => alert('PNG 產生失敗，請改用「列印」功能另存 PDF。'));
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(run); else run();
+}
+
+document.addEventListener('input', recalc);
+document.addEventListener('change', recalc);
+recalc();
+</script>
+</body>
+</html>

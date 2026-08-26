@@ -364,7 +364,12 @@ function unitTW(n){
 function round(v, d){ const f = Math.pow(10, d||0); return Math.sign(v)*Math.round(Math.abs(v)*f + 1e-9)/f; }
 function roundToInterval(v, iv){ const inv = 1/iv; return round(v*inv, 0)/inv; }
 function decOf(iv){ return iv < 1 ? String(iv).split('.')[1].length : 0; }
-function num(id){ const el = document.getElementById(id); if(!el) return 0; const v = parseFloat(el.value); return isFinite(v) ? v : 0; }
+function num(id){
+  const el = document.getElementById(id); if(!el) return 0;
+  const v = parseFloat(el.value);
+  // 檢驗數值不應為負；負值一律視為 0，避免能量等換算結果失真
+  return (isFinite(v) && v > 0) ? v : 0;
+}
 function esc(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
 /* 依 UNIT_STYLE 取得表達單位（n.u 為「中文(英文)」完整形式） */
@@ -390,13 +395,13 @@ function buildInputs(){
           + '<td class="num" id="raw_energy">–</td><td class="num">' + esc(unitTW(n)) + '</td></tr>';
     } else if (n.req){
       rq += '<tr' + (n.ind ? ' class="sub"' : '') + '><td>' + esc(TW[n.k]) + '(' + esc(n.en) + ')</td>'
-          + '<td class="num"><input id="in_' + n.k + '" type="number" step="any" value=""></td>'
+          + '<td class="num"><input id="in_' + n.k + '" type="number" step="any" min="0" value=""></td>'
           + '<td class="num">' + esc(unitTW(n)) + '</td></tr>';
     } else {
       op += '<tr' + (n.ind ? ' class="sub"' : '') + '>'
           + '<td><input type="checkbox" id="ck_' + n.k + '"></td>'
           + '<td>' + esc(TW[n.k]) + '</td>'
-          + '<td class="num"><input id="in_' + n.k + '" type="number" step="any" value=""></td>'
+          + '<td class="num"><input id="in_' + n.k + '" type="number" step="any" min="0" value=""></td>'
           + '<td class="num">' + esc(unitTW(n)) + '</td></tr>';
     }
   });

@@ -287,20 +287,20 @@
         </thead>
         <tbody id="calcBody">
           <tr class="auto-row"><td>熱量(Calories)<span class="auto-tag">自動計算</span></td><td class="num" id="cal_per100">–</td></tr>
-          <tr><td>蛋白質(Protein)</td><td class="num"><input id="in_protein" type="number" step="any" value=""></td></tr>
-          <tr><td>脂肪(Total Fat)</td><td class="num"><input id="in_fat" type="number" step="any" value=""></td></tr>
-          <tr class="sub"><td>飽和脂肪(Saturated Fat)</td><td class="num"><input id="in_satfat" type="number" step="any" value=""></td></tr>
-          <tr class="sub"><td>反式脂肪(Trans Fat)</td><td class="num"><input id="in_transfat" type="number" step="any" value=""></td></tr>
-          <tr><td>碳水化合物(Total Carbohydrate)</td><td class="num"><input id="in_carb" type="number" step="any" value=""></td></tr>
-          <tr class="sub"><td>膳食纖維(Dietary Fiber)</td><td class="num"><input id="in_fiber" type="number" step="any" value=""></td></tr>
-          <tr class="sub"><td>總糖(Total Sugars)</td><td class="num"><input id="in_sugars" type="number" step="any" value=""></td></tr>
-          <tr class="sub"><td>添加糖(Added Sugars)</td><td class="num"><input id="in_addsugars" type="number" step="any" value=""></td></tr>
-          <tr><td>膽固醇(Cholesterol)</td><td class="num"><input id="in_chol" type="number" step="any" value=""></td></tr>
-          <tr><td>鈉(Sodium)</td><td class="num"><input id="in_sodium" type="number" step="any" value=""></td></tr>
-          <tr><td>維生素D(Vitamin D)</td><td class="num"><input id="in_vitd" type="number" step="any" value=""></td></tr>
-          <tr><td>鈣(Calcium)</td><td class="num"><input id="in_calcium" type="number" step="any" value=""></td></tr>
-          <tr><td>鐵(Iron)</td><td class="num"><input id="in_iron" type="number" step="any" value=""></td></tr>
-          <tr><td>鉀(Potassium)</td><td class="num"><input id="in_potassium" type="number" step="any" value=""></td></tr>
+          <tr><td>蛋白質(Protein)</td><td class="num"><input id="in_protein" type="number" step="any" min="0" value=""></td></tr>
+          <tr><td>脂肪(Total Fat)</td><td class="num"><input id="in_fat" type="number" step="any" min="0" value=""></td></tr>
+          <tr class="sub"><td>飽和脂肪(Saturated Fat)</td><td class="num"><input id="in_satfat" type="number" step="any" min="0" value=""></td></tr>
+          <tr class="sub"><td>反式脂肪(Trans Fat)</td><td class="num"><input id="in_transfat" type="number" step="any" min="0" value=""></td></tr>
+          <tr><td>碳水化合物(Total Carbohydrate)</td><td class="num"><input id="in_carb" type="number" step="any" min="0" value=""></td></tr>
+          <tr class="sub"><td>膳食纖維(Dietary Fiber)</td><td class="num"><input id="in_fiber" type="number" step="any" min="0" value=""></td></tr>
+          <tr class="sub"><td>總糖(Total Sugars)</td><td class="num"><input id="in_sugars" type="number" step="any" min="0" value=""></td></tr>
+          <tr class="sub"><td>添加糖(Added Sugars)</td><td class="num"><input id="in_addsugars" type="number" step="any" min="0" value=""></td></tr>
+          <tr><td>膽固醇(Cholesterol)</td><td class="num"><input id="in_chol" type="number" step="any" min="0" value=""></td></tr>
+          <tr><td>鈉(Sodium)</td><td class="num"><input id="in_sodium" type="number" step="any" min="0" value=""></td></tr>
+          <tr><td>維生素D(Vitamin D)</td><td class="num"><input id="in_vitd" type="number" step="any" min="0" value=""></td></tr>
+          <tr><td>鈣(Calcium)</td><td class="num"><input id="in_calcium" type="number" step="any" min="0" value=""></td></tr>
+          <tr><td>鐵(Iron)</td><td class="num"><input id="in_iron" type="number" step="any" min="0" value=""></td></tr>
+          <tr><td>鉀(Potassium)</td><td class="num"><input id="in_potassium" type="number" step="any" min="0" value=""></td></tr>
         </tbody>
       </table>
       <div id="carbWarn" style="display:none;margin-top:10px;padding:10px 12px;border-radius:6px;background:#fdecea;border:1px solid #e74c3c;color:#c0392b;font-size:12.5px;line-height:1.5;">
@@ -371,7 +371,12 @@ function xlround(v, d){
   return Math.sign(v) * Math.round(Math.abs(v) * f + 1e-9) / f;
 }
 function mround(v, m){ return xlround(v / m, 0) * m; }
-function num(id){ const v = parseFloat(document.getElementById(id).value); return isFinite(v) ? v : 0; }
+function num(id){
+  const el = document.getElementById(id); if(!el) return 0;
+  const v = parseFloat(el.value);
+  // 檢驗數值不應為負；負值一律視為 0，避免熱量等換算結果失真
+  return (isFinite(v) && v > 0) ? v : 0;
+}
 function fix(v, d){
   const s = (Math.round(v * Math.pow(10,d) + 1e-9) / Math.pow(10,d)).toFixed(d);
   // 只有含小數點時才去除尾端的 0（避免整數 250 被誤刪成 25）

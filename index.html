@@ -33,10 +33,10 @@
   .hero p{margin:10px 0 0;color:var(--ink-soft);font-size:14px;}
 
   .cards{
-    display:grid;grid-template-columns:1fr 1fr;gap:20px;
-    width:100%;max-width:680px;
+    display:grid;grid-template-columns:repeat(3,1fr);gap:20px;
+    width:100%;max-width:900px;
   }
-  @media (max-width:560px){.cards{grid-template-columns:1fr;}}
+  @media (max-width:820px){.cards{grid-template-columns:1fr;max-width:420px;}}
 
   .card{
     display:block;text-decoration:none;color:inherit;
@@ -66,6 +66,12 @@
   </div>
 
   <div class="cards">
+    <a class="card" href="tw.html">
+      <div class="flag">🇹🇼</div>
+      <h2>台灣 TFDA</h2>
+      <div class="sub">八大營養標示<br>營養標示（食品安全衛生管理法）</div>
+      <div class="go">開始製作 →</div>
+    </a>
     <a class="card" href="us.html">
       <div class="flag">🇺🇸</div>
       <h2>美國 FDA</h2>
